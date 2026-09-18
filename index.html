@@ -236,6 +236,7 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
     <div class="nav-section mt-2">관리</div>
     <a href="#" class="nav-link" onclick="showPage('standards',this)"><i class="bi bi-clipboard2-check"></i>관리기준</a>
     <a href="#" class="nav-link" onclick="showPage('inspection',this)"><i class="bi bi-file-earmark-check"></i>점검 시트</a>
+    <a href="#" class="nav-link" onclick="showPage('inspHistory',this)"><i class="bi bi-clipboard2-pulse"></i>점검 이력</a>
     <a href="#" class="nav-link" onclick="showPage('history',this)"><i class="bi bi-clock-history"></i>이력 관리</a>
     <div class="nav-section mt-2">시스템</div>
     <a href="#" class="nav-link" onclick="showPage('bomUpload',this)"><i class="bi bi-upload"></i>파일 업로드</a>
@@ -339,7 +340,7 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
           <div class="col-md-3"><select class="form-select form-select-sm" id="histFilterJig" onchange="renderHistory()"><option value="">전체 지그</option></select></div>
           <div class="col-md-2"><select class="form-select form-select-sm" id="histFilterType" onchange="renderHistory()">
             <option value="">전체 유형</option><option value="등록">등록</option><option value="수정">수정</option>
-            <option value="위치이동">위치이동</option><option value="수리">수리</option><option value="점검">점검</option><option value="수량변경">수량변경</option></select></div>
+            <option value="위치이동">위치이동</option><option value="수리">수리</option><option value="수량변경">수량변경</option></select></div>
           <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="histFromDate" onchange="renderHistory()"></div>
           <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="histToDate" onchange="renderHistory()"></div>
         </div>
@@ -439,14 +440,24 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
             </div>
           </div>
         </div>
-        <!-- 점검 이력 -->
-        <div class="col-12">
-          <div class="card shadow-sm">
-            <div class="card-header fw-bold" style="background:#f8f9fa"><i class="bi bi-clock-history me-2"></i>점검 이력</div>
-            <div class="card-body p-0" id="inspectionList" style="max-height:360px;overflow-y:auto"></div>
-          </div>
+      </div>
+    </div>
+
+    <!-- Inspection History -->
+    <div id="page-inspHistory" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>점검 이력</h5>
+      </div>
+      <div class="filter-bar mb-3">
+        <div class="row g-2">
+          <div class="col-md-4"><select class="form-select form-select-sm" id="inspHistFilterJig" onchange="renderInspHistoryPage()"><option value="">전체 지그</option></select></div>
+          <div class="col-md-2"><select class="form-select form-select-sm" id="inspHistFilterResult" onchange="renderInspHistoryPage()">
+            <option value="">전체 결과</option><option value="OK">OK</option><option value="NG">NG</option><option value="미판정">미판정</option></select></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="inspHistFrom" onchange="renderInspHistoryPage()"></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="inspHistTo" onchange="renderInspHistoryPage()"></div>
         </div>
       </div>
+      <div id="inspHistoryContent"></div>
     </div>
 
     <!-- Settings -->
@@ -742,6 +753,23 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
   </div>
 </div>
 
+<!-- Inspection View Modal -->
+<div class="modal fade" id="inspViewModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="inspViewTitle">점검 시트</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="inspViewBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-outline-danger btn-sm" id="inspViewDelBtn" onclick="deleteInspectionFromView()"><i class="bi bi-trash me-1"></i>삭제</button>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Lightbox -->
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
   <span class="lightbox-close">&times;</span>
@@ -1002,8 +1030,9 @@ async function renderPage(n) {
   if (n==='allList')    await renderAllList();
   if (n==='byModel')    await renderByModel();
   if (n==='byCustomer') await renderByCustomer();
-  if (n==='history')    await renderHistory();
-  if (n==='inspection') await renderInspection();
+  if (n==='history')     await renderHistory();
+  if (n==='inspHistory') await renderInspHistoryPage();
+  if (n==='inspection')  await renderInspection();
   if (n==='settings')   await renderSettings();
   if (n==='standards')  await renderStandards();
   if (n==='bomUpload')  await renderBomUpload();
@@ -1053,10 +1082,7 @@ function phaseBadge(p) {
 // ═══════════════════════════════════════
 async function renderDashboard() {
   const jigs = await dbGetAll('jigs');
-  const inspections = await dbGetAll('inspections');
   const modelPhaseMap = await getSetting('modelPhases',{});
-  const lastInsp = {};
-  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
 
   const totalQty = jigs.reduce((s,j)=>s+(parseInt(j.qty)||0),0);
   const models = [...new Set(jigs.flatMap(j=>j.models&&j.models.length?j.models:(j.model?[j.model]:[])))].filter(Boolean);
@@ -1081,7 +1107,7 @@ async function renderDashboard() {
       <td>${statusBadge(j.status)}</td>
       <td>${j.maker||'-'}</td>
       <td><small>${j.date||'-'}</small></td>
-      <td><small>${lastInsp[j.id]||'<span class="text-danger">미점검</span>'}</small></td>
+      <td><small>${j.lastInspection||'<span class="text-danger">미점검</span>'}</small></td>
       <td>
         <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
         ${canDelete()?`<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteJig(${j.id});event.stopPropagation()" title="삭제"><i class="bi bi-trash"></i></button>`:''}
@@ -1096,11 +1122,8 @@ async function renderDashboard() {
 // ═══════════════════════════════════════
 async function renderAllList() {
   let jigs = await dbGetAll('jigs');
-  const inspections = await dbGetAll('inspections');
   const modelPhaseMap = await getSetting('modelPhases',{});
   const locations = await getSetting('locations',[]);
-  const lastInsp={};
-  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
 
   // 모델 필터: jig 데이터에서 추출 (공용지그 복수 모델 포함)
   const allJigModels = [...new Set(jigs.flatMap(j=>j.models&&j.models.length?j.models:(j.model?[j.model]:[])))].sort();
@@ -1141,7 +1164,7 @@ async function renderAllList() {
       <td><small>${j.contact||'-'}</small></td>
       <td><small>${j.phone||'-'}</small></td>
       <td><small>${j.date||'-'}</small></td>
-      <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+      <td><small>${j.lastInspection||'<span class="text-warning">미점검</span>'}</small></td>
       <td>
         <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id})"><i class="bi bi-eye"></i></button>
         <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
@@ -1165,10 +1188,7 @@ function clearFilters() {
 // ═══════════════════════════════════════
 async function renderByModel() {
   const jigs = await dbGetAll('jigs');
-  const inspections = await dbGetAll('inspections');
   const modelPhaseMap = await getSetting('modelPhases',{});
-  const lastInsp={};
-  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
 
   const grouped={};
   jigs.forEach(j=>{
@@ -1197,7 +1217,7 @@ async function renderByModel() {
           <td>${j.contact||'-'}</td>
           <td>${j.phone||'-'}</td>
           <td><small>${j.date||'-'}</small></td>
-          <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+          <td><small>${j.lastInspection||'<span class="text-warning">미점검</span>'}</small></td>
           <td>
             <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id})"><i class="bi bi-eye"></i></button>
             <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id})" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
@@ -1221,10 +1241,10 @@ async function renderByModel() {
                 <th style="position:relative">보관위치</th>
                 <th style="width:68px;position:relative">상태</th>
                 <th style="position:relative">제조사</th>
-                <th style="position:relative">담당자</th>
-                <th style="position:relative">연락처</th>
+                <th style="width:72px;position:relative">담당자</th>
+                <th style="width:90px;position:relative">연락처</th>
                 <th style="width:88px;position:relative">입고일자</th>
-                <th style="width:88px;position:relative">마지막점검</th>
+                <th style="width:110px;position:relative">마지막점검</th>
                 <th style="width:100px;position:relative">작업</th>
               </tr></thead>
               <tbody>${rows}</tbody>
@@ -1239,9 +1259,6 @@ async function renderByModel() {
 
 async function renderByCustomer() {
   const jigs = await dbGetAll('jigs');
-  const inspections = await dbGetAll('inspections');
-  const lastInsp = {};
-  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
   const w=canWrite(), a=canAdd();
   let html='';
   if (!jigs.length) { html='<div class="text-muted text-center py-5">등록된 지그 없음</div>'; }
@@ -1265,7 +1282,7 @@ async function renderByCustomer() {
           <td>${statusBadge(j.status)}</td>
           <td>${j.maker||'-'}</td>
           <td><small>${j.date||'-'}</small></td>
-          <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+          <td><small>${j.lastInspection||'<span class="text-warning">미점검</span>'}</small></td>
           <td>
             <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id});event.stopPropagation()"><i class="bi bi-eye"></i></button>
             <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
@@ -1490,7 +1507,6 @@ async function renderInspection() {
   else _applyInspStateToForm();
   renderInspSheet();
   renderFinalJudgment();
-  await renderInspHistory();
 }
 
 function renderInspSheet() {
@@ -1740,8 +1756,8 @@ async function saveInspectionSheet() {
     : allJudgments.every(j => j === 'OK') ? 'OK'
     : '미판정';
   const insp = { ...inspState, result, createdAt: new Date().toISOString() };
-  await dbAdd('inspections', insp);
-  await dbAdd('history', {jigId, date, type:'점검', content:`점검결과: ${result}`, createdAt:new Date().toISOString()});
+  delete insp.images; // 이미지는 템플릿에 저장
+  await saveInspRec(insp);
   // 템플릿 영구 저장 (이미지·항목내용·비고 보존, 판정만 초기화)
   const templateData = {
     sections: inspState.sections.map(s => ({
@@ -1760,59 +1776,184 @@ async function saveInspectionSheet() {
   if (jig) { jig.lastInspection = date; await dbPut('jigs', jig); }
   alert('점검 시트가 저장되었습니다.');
   newInspectionSheet();
-  await renderInspHistory();
+  await renderInspHistoryPage();
 }
 
-async function renderInspHistory() {
+// ── 점검기록 저장/조회 (settings 테이블 활용) ──
+async function saveInspRec(data) {
+  const key = 'insp_rec_' + data.jigId + '_' + Date.now();
+  await setSetting(key, data);
+  const idx = await getSetting('insp_rec_index', []);
+  idx.push({ key, jigId: data.jigId, date: data.date, result: data.result,
+             createdAt: data.createdAt, mgmtNo: data.mgmtNo||'', finalJudgment: data.finalJudgment||{} });
+  await setSetting('insp_rec_index', idx);
+  return key;
+}
+async function getAllInspRecs() { return await getSetting('insp_rec_index', []); }
+async function getInspRec(key)  { return await getSetting(key, null); }
+async function deleteInspRec(key) {
+  await _sb.from('settings').delete().eq('key', key);
+  const idx = await getSetting('insp_rec_index', []);
+  await setSetting('insp_rec_index', idx.filter(r => r.key !== key));
+}
+
+function _buildInspItemHtml(i, jigMap) {
+  const jig = jigMap[i.jigId];
+  const jigName = jig ? `${jig.model} - ${jig.name}` : '삭제된 지그';
+  const rc = i.result || '미판정';
+  const rcCls = rc==='OK'?'success': rc==='NG'?'danger':'secondary';
+  const fj = i.finalJudgment||{};
+  const fjHtml = Object.entries(fj).filter(([,v])=>v).map(([k,v])=>`<span class="badge ${v==='OK'?'bg-success':'bg-danger'} me-1">${k}: ${v}</span>`).join('');
+  return `<div class="insp-history-item" onclick="loadInspRecord('${i.key}')">
+    <div class="d-flex justify-content-between align-items-start">
+      <div>
+        <span class="badge bg-${rcCls} me-2">${rc}</span>
+        <strong>${jigName}</strong>
+        ${i.mgmtNo?`<span class="text-muted ms-2 small">${i.mgmtNo}</span>`:''}
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <small class="text-muted">${i.date||''}</small>
+        ${canDelete()?`<button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="event.stopPropagation();deleteInspection('${i.key}')"><i class="bi bi-trash"></i></button>`:''}
+      </div>
+    </div>
+    ${fjHtml?`<div class="mt-1">${fjHtml}</div>`:''}
+  </div>`;
+}
+
+async function renderInspHistory() {}
+
+async function renderInspHistoryPage() {
   const jigs = await dbGetAll('jigs');
   const jigMap = {}; jigs.forEach(j => jigMap[j.id] = j);
-  const inspections = await dbGetAll('inspections');
-  inspections.sort((a,b) => b.createdAt > a.createdAt ? 1 : -1);
-  const el = document.getElementById('inspectionList');
+
+  const jigSel = document.getElementById('inspHistFilterJig');
+  if (jigSel) {
+    const curV = jigSel.value;
+    jigSel.innerHTML = '<option value="">전체 지그</option>' + jigs.map(j=>`<option value="${j.id}">${j.model} - ${j.name}</option>`).join('');
+    jigSel.value = curV;
+  }
+
+  let records = await getAllInspRecs();
+  const fJig   = document.getElementById('inspHistFilterJig')?.value;
+  const fResult= document.getElementById('inspHistFilterResult')?.value;
+  const fFrom  = document.getElementById('inspHistFrom')?.value;
+  const fTo    = document.getElementById('inspHistTo')?.value;
+  if (fJig)    records = records.filter(i => i.jigId == fJig);
+  if (fResult) records = records.filter(i => (i.result||'미판정') === fResult);
+  if (fFrom)   records = records.filter(i => (i.date||'') >= fFrom);
+  if (fTo)     records = records.filter(i => (i.date||'') <= fTo);
+  records.sort((a,b) => (b.date||b.createdAt||'') > (a.date||a.createdAt||'') ? 1 : -1);
+
+  const el = document.getElementById('inspHistoryContent');
   if (!el) return;
-  if (!inspections.length) { el.innerHTML = '<div class="text-muted text-center py-4">점검 기록 없음</div>'; return; }
-  el.innerHTML = inspections.map(i => {
-    const jig = jigMap[i.jigId];
-    const jigName = jig ? `${jig.model} - ${jig.name}` : '삭제된 지그';
-    const rc = i.result || '미판정';
-    const rcCls = rc==='OK'?'success': rc==='NG'?'danger':'secondary';
-    const fj = i.finalJudgment||{};
-    const fjHtml = Object.entries(fj).filter(([,v])=>v).map(([k,v])=>`<span class="badge ${v==='OK'?'bg-success':'bg-danger'} me-1">${k}: ${v}</span>`).join('');
-    return `<div class="insp-history-item" onclick="loadInspRecord(${i.id})">
-      <div class="d-flex justify-content-between align-items-start">
-        <div>
-          <span class="badge bg-${rcCls} me-2">${rc}</span>
-          <strong>${jigName}</strong>
-          ${i.mgmtNo?`<span class="text-muted ms-2 small">${i.mgmtNo}</span>`:''}
-        </div>
-        <div class="d-flex align-items-center gap-2">
-          <small class="text-muted">${i.date}</small>
-          ${(currentUser&&(currentUser.perm==='admin'||currentUser.canDelete))?`<button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="event.stopPropagation();deleteInspection(${i.id})"><i class="bi bi-trash"></i></button>`:''}
-        </div>
+  if (!records.length) {
+    el.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-inbox" style="font-size:3rem"></i><div class="mt-2">점검 기록 없음</div></div>';
+    return;
+  }
+  const byDate = {};
+  records.forEach(i => { const d = i.date||'날짜미상'; if(!byDate[d]) byDate[d]=[]; byDate[d].push(i); });
+  let html = `<div class="mb-2 text-muted small">총 <strong>${records.length}</strong>건</div>`;
+  Object.entries(byDate).sort(([a],[b]) => b.localeCompare(a)).forEach(([date, items]) => {
+    html += `<div class="mb-1 text-muted small fw-bold ps-1"><i class="bi bi-calendar3 me-1"></i>${date}</div>`;
+    items.forEach(i => { html += _buildInspItemHtml(i, jigMap); });
+  });
+  el.innerHTML = html;
+}
+
+let _inspViewKey = null;
+async function loadInspRecord(key) {
+  const insp = await getInspRec(key); if (!insp) return;
+  _inspViewKey = key;
+
+  const [jig, tmpl] = await Promise.all([
+    dbGet('jigs', insp.jigId),
+    getSetting('insp_tmpl_' + insp.jigId, null)
+  ]);
+  const jigName = jig ? `${jig.model} - ${jig.name}` : '삭제된 지그';
+  const images = (tmpl && tmpl.images) ? tmpl.images : [null,null,null];
+
+  const rc = insp.result || '미판정';
+  const rcCls = rc==='OK'?'success': rc==='NG'?'danger':'secondary';
+  const signs = insp.signs || ['','',''];
+
+  const imgLabels = ['제품', '지그 안착전', '지그 안착후'];
+  const imgParts = [];
+  images.forEach((img, i) => {
+    if (i > 0) imgParts.push(`<div class="col-auto text-muted d-flex align-items-center"><i class="bi bi-arrow-right fs-3"></i></div>`);
+    imgParts.push(`<div class="col text-center">
+      <div class="fw-bold small mb-1">${imgLabels[i]}</div>
+      <div class="insp-img-box" style="cursor:${img?'pointer':'default'};${img?'padding:0':''}" ${img?`onclick="openLightbox('${img}')"`:''}>
+        ${img ? `<img src="${img}" style="width:100%;height:100%;object-fit:cover;border-radius:4px">` : '<i class="bi bi-camera fs-4 text-muted"></i>'}
       </div>
-      ${fjHtml?`<div class="mt-1">${fjHtml}</div>`:''}
+    </div>`);
+  });
+
+  const sectHtml = (insp.sections||[]).map(s => {
+    const rowsHtml = (s.groups||[]).flatMap(g =>
+      (g.items||[]).map((it, idx) => {
+        const jc = it.judgment==='OK'?'success':it.judgment==='NG'?'danger':'secondary';
+        return `<tr>
+          ${idx===0?`<td rowspan="${g.items.length}" class="align-middle fw-bold small" style="background:#f8f9fa;white-space:nowrap">${g.name||''}</td>`:''}
+          <td class="small">${it.product||''}</td>
+          <td class="small">${it.note||''}</td>
+          <td class="text-center"><span class="badge bg-${jc}">${it.judgment||'미판정'}</span></td>
+        </tr>`;
+      })
+    ).join('');
+    return `<div class="mb-3">
+      <div class="fw-bold px-3 py-2" style="background:#e9ecef;border-radius:4px 4px 0 0">${s.name||''}</div>
+      <div class="table-responsive">
+        <table class="table table-bordered table-sm mb-0">
+          <thead style="background:#f8f9fa"><tr>
+            <th>점검 항목</th><th>제품명</th><th>비고</th><th style="width:80px">판정</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
     </div>`;
   }).join('');
+
+  const fj = insp.finalJudgment || {};
+  const fjHtml = Object.entries(fj).filter(([,v])=>v)
+    .map(([k,v])=>`<span class="badge ${v==='OK'?'bg-success':'bg-danger'} me-1 px-3 py-2">${k}: ${v}</span>`).join('')
+    || '<span class="text-muted small">없음</span>';
+
+  document.getElementById('inspViewBody').innerHTML = `
+    <div class="card mb-3 shadow-sm"><div class="card-body py-2">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-4"><div class="small text-muted mb-1">대상 지그</div><div class="fw-bold">${jigName}</div></div>
+        <div class="col-md-2"><div class="small text-muted mb-1">점검일자</div><div>${insp.date||'-'}</div></div>
+        <div class="col-md-3"><div class="small text-muted mb-1">관리번호</div><div>${insp.mgmtNo||'-'}</div></div>
+        <div class="col-md-3"><div class="small text-muted mb-1">결재 (작성 / 검토 / 승인)</div><div>${signs.map(s=>s||'-').join(' / ')}</div></div>
+      </div>
+    </div></div>
+    <div class="card mb-3 shadow-sm"><div class="card-body py-2">
+      <div class="row g-2 align-items-center text-center">${imgParts.join('')}</div>
+    </div></div>
+    ${sectHtml}
+    <div class="d-flex align-items-center flex-wrap gap-2 p-3 border rounded" style="background:#f8f9fa">
+      <span class="fw-bold">최종 판정:</span>${fjHtml}
+      <span class="ms-auto fw-bold">종합결과: <span class="badge bg-${rcCls} fs-6">${rc}</span></span>
+    </div>`;
+
+  document.getElementById('inspViewTitle').textContent = `점검 시트 — ${jigName} (${insp.date||''})`;
+  document.getElementById('inspViewDelBtn').style.display = canDelete() ? '' : 'none';
+  new bootstrap.Modal(document.getElementById('inspViewModal')).show();
 }
 
-async function loadInspRecord(id) {
-  const insp = await dbGet('inspections', id); if (!insp) return;
-  inspState = { ...insp };
-  if (!inspState.images) inspState.images = [null,null,null];
-  if (!inspState.finalJudgment) inspState.finalJudgment = {조립:'',품질:'',개발:''};
-  if (!inspState.sections) inspState.sections = [];
-  const jigSel = document.getElementById('inspJigSelect');
-  if (jigSel) jigSel.value = insp.jigId||'';
-  _applyInspStateToForm();
-  renderInspSheet();
-  renderFinalJudgment();
+async function deleteInspectionFromView() {
+  if (!canDelete()) return;
+  if (!confirm('이 점검 기록을 삭제하시겠습니까?')) return;
+  await deleteInspRec(_inspViewKey);
+  bootstrap.Modal.getInstance(document.getElementById('inspViewModal')).hide();
+  await renderInspHistoryPage();
 }
 
-async function deleteInspection(id) {
+async function deleteInspection(key) {
   if (!canDelete()) { alert('삭제 권한이 없습니다'); return; }
   if (!confirm('삭제하시겠습니까?')) return;
-  await dbDelete('inspections', id);
-  await renderInspHistory();
+  await deleteInspRec(key);
+  await renderInspHistoryPage();
 }
 
 // ═══════════════════════════════════════
