@@ -262,9 +262,9 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
         <div class="table-responsive">
           <table class="table table-hover" id="dashTable">
             <thead><tr>
-              <th style="width:52px">사진</th><th style="width:110px">모델명</th><th style="width:70px">단계</th>
-              <th>지그명</th><th style="width:70px">수량</th><th>보관위치</th>
-              <th style="width:70px">상태</th><th>제조사</th><th style="width:90px">입고일</th><th style="width:90px">마지막점검</th><th style="width:80px">작업</th>
+              <th style="width:52px">사진</th><th style="width:180px">모델명</th><th style="width:70px">단계</th>
+              <th style="width:120px">지그명</th><th style="width:70px">수량</th><th style="width:90px">보관위치</th>
+              <th style="width:70px">상태</th><th style="width:80px">제조사</th><th style="width:90px">입고일</th><th style="width:90px">마지막점검</th><th style="width:80px">작업</th>
             </tr></thead>
             <tbody id="dashTableBody"></tbody>
           </table>
@@ -2276,15 +2276,17 @@ async function saveHistory() {
 // ═══════════════════════════════════════
 async function showDetail(id) {
   const j=await dbGet('jigs',id); if(!j) return;
-  const histories=await dbGetAll('history','jigId',id);
-  const inspections=await dbGetAll('inspections','jigId',id);
-  const detailPhaseMap=await getSetting('modelPhases',{});
+  const [histories, allRecs, detailPhaseMap] = await Promise.all([
+    dbGetAll('history','jigId',id),
+    getAllInspRecs(),
+    getSetting('modelPhases',{})
+  ]);
+  const inspections = allRecs.filter(r=>r.jigId==id).sort((a,b)=>(b.date||'')>(a.date||'')?1:-1);
   histories.sort((a,b)=>b.createdAt>a.createdAt?1:-1);
-  inspections.sort((a,b)=>b.date>a.date?1:-1);
 
   document.getElementById('detailTitle').innerHTML=`<i class="bi bi-tools me-2"></i>${j.model} - ${j.name}`;
   const photosHtml=j.photos&&j.photos.length?`<div class="photo-grid mb-3">${j.photos.map(p=>`<div class="photo-thumb" style="width:90px;height:90px"><img src="${p}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openLightbox('${p}')"></div>`).join('')}</div>`:'<div class="text-muted small mb-3">사진 없음</div>';
-  const lastInspHtml=inspections.length?`<span class="badge bg-success">${inspections[0].date} - ${inspections[0].result}</span>`:'<span class="badge bg-secondary">미점검</span>';
+  const lastInspHtml=j.lastInspection?`<span class="badge bg-success">${j.lastInspection}</span>`:'<span class="badge bg-secondary">미점검</span>';
   const typeClass={'위치이동':'move','수리':'repair','점검':'inspect'};
   const histHtml=histories.slice(0,10).map(h=>`<div class="history-item history-${typeClass[h.type]||''} mb-2">
     <div class="d-flex justify-content-between"><span class="h-type">[${h.type}]</span><span class="h-date">${h.date}</span></div>
@@ -2328,10 +2330,10 @@ async function showDetail(id) {
         <h6 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>변경 이력 (최근 10건)</h6>
         ${histHtml}
         <h6 class="fw-bold border-bottom pb-2 mb-3 mt-3"><i class="bi bi-file-earmark-check me-2 text-primary"></i>점검 이력</h6>
-        ${inspections.slice(0,5).map(i=>`<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
-          <span class="badge bg-${i.result==='양호'?'success':i.result==='수리필요'?'warning':'danger'}">${i.result}</span>
-          <span class="small">${i.date}</span>
-          ${i.note?`<span class="text-muted small">${i.note}</span>`:''}
+        ${inspections.slice(0,5).map(i=>`<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded" style="cursor:pointer" onclick="loadInspRecord('${i.key}')">
+          <span class="badge bg-${i.result==='OK'?'success':i.result==='NG'?'danger':'secondary'}">${i.result||'미판정'}</span>
+          <span class="small">${i.date||''}</span>
+          ${i.mgmtNo?`<span class="text-muted small">${i.mgmtNo}</span>`:''}
         </div>`).join('')||'<div class="text-muted small">점검 이력 없음</div>'}
       </div>
     </div>`;
