@@ -1411,13 +1411,13 @@ async function onInspJigChange() {
   if (latest) {
     // 이전 점검의 항목 구조만 복사, 판정은 초기화
     const sections = JSON.parse(JSON.stringify(latest.sections));
-    sections.forEach(s => s.groups.forEach(g => g.items.forEach(it => { it.judgment=''; it.note=''; })));
+    sections.forEach(s => s.groups.forEach(g => g.items.forEach(it => { it.judgment=''; })));
     inspState = {
       jigId,
       date: new Date().toISOString().split('T')[0],
       mgmtNo: latest.mgmtNo||'',
       signs: latest.signs||['','',''],
-      images: [null,null,null],
+      images: latest.images||[null,null,null],
       sections,
       finalJudgment: {조립:'',품질:'',개발:''}
     };
