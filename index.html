@@ -352,6 +352,7 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
       <div class="d-flex align-items-center justify-content-between mb-3">
         <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-check me-2 text-primary"></i>점검 시트</h5>
         <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-warning" id="btnInspTemplateEdit" onclick="toggleInspTemplateLock()" style="display:none"><i class="bi bi-pencil me-1"></i>템플릿 편집</button>
           <button class="btn btn-sm btn-outline-secondary" onclick="newInspectionSheet()"><i class="bi bi-file-earmark-plus me-1"></i>새 점검</button>
           <button class="btn btn-sm btn-primary" onclick="saveInspectionSheet()"><i class="bi bi-save me-1"></i>저장</button>
         </div>
@@ -1365,6 +1366,8 @@ async function deleteHistory(id) {
 // INSPECTION
 // ═══════════════════════════════════════
 let inspState = { jigId:null, date:'', mgmtNo:'', signs:['','',''], images:[null,null,null], sections:[], finalJudgment:{조립:'',품질:'',개발:''} };
+let inspTemplateLocked = false;
+let _inspHasTemplate = false;
 
 function _iEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
@@ -1418,6 +1421,8 @@ async function onInspJigChange() {
       sections,
       finalJudgment: {조립:'',품질:'',개발:''}
     };
+    inspTemplateLocked = true;
+    _inspHasTemplate = true;
   } else {
     inspState = {
       jigId,
@@ -1426,17 +1431,42 @@ async function onInspJigChange() {
       sections: _defaultSections(),
       finalJudgment: {조립:'',품질:'',개발:''}
     };
+    inspTemplateLocked = false;
+    _inspHasTemplate = false;
   }
   _applyInspStateToForm();
+  _updateInspTemplateLockBtn();
   renderInspSheet();
   renderFinalJudgment();
 }
 
 function newInspectionSheet() {
   inspState = { jigId:null, date:new Date().toISOString().split('T')[0], mgmtNo:'', signs:['','',''], images:[null,null,null], sections:_defaultSections(), finalJudgment:{조립:'',품질:'',개발:''} };
+  inspTemplateLocked = false;
+  _inspHasTemplate = false;
   _applyInspStateToForm();
+  _updateInspTemplateLockBtn();
   renderInspSheet();
   renderFinalJudgment();
+}
+
+function _updateInspTemplateLockBtn() {
+  const btn = document.getElementById('btnInspTemplateEdit');
+  if (!btn) return;
+  btn.style.display = _inspHasTemplate ? '' : 'none';
+  if (inspTemplateLocked) {
+    btn.innerHTML = '<i class="bi bi-pencil me-1"></i>템플릿 편집';
+    btn.className = 'btn btn-sm btn-outline-warning';
+  } else {
+    btn.innerHTML = '<i class="bi bi-lock me-1"></i>편집 잠금';
+    btn.className = 'btn btn-sm btn-outline-secondary';
+  }
+}
+
+function toggleInspTemplateLock() {
+  inspTemplateLocked = !inspTemplateLocked;
+  _updateInspTemplateLockBtn();
+  renderInspSheet();
 }
 
 function _applyInspStateToForm() {
@@ -1470,76 +1500,107 @@ async function renderInspection() {
 function renderInspSheet() {
   const wrap = document.getElementById('inspSectionsWrapper');
   if (!wrap) return;
+  const locked = inspTemplateLocked;
+
   let html = `<table class="table table-bordered table-sm mb-0 insp-table" style="font-size:0.84rem">
-    <colgroup><col style="width:155px"><col><col style="width:58px"><col style="width:58px"><col style="width:140px"><col style="width:40px"></colgroup>
+    <colgroup><col style="width:155px"><col><col style="width:58px"><col style="width:58px"><col style="width:140px">${locked?'':'<col style="width:40px">'}</colgroup>
     <thead>
-      <tr><th rowspan="2">설비(공정) 점검 항목</th><th rowspan="2">제품 검사 항목</th><th colspan="2">판정</th><th rowspan="2">비고</th><th rowspan="2"></th></tr>
+      <tr><th rowspan="2">JIG 점검 항목</th><th rowspan="2">제품 검사 항목</th><th colspan="2">판정</th><th rowspan="2">비고</th>${locked?'':'<th rowspan="2"></th>'}</tr>
       <tr><th>OK</th><th>NG</th></tr>
     </thead><tbody>`;
 
   inspState.sections.forEach((sec, si) => {
-    html += `<tr class="insp-sec-hdr">
-      <td colspan="5" style="background:#f0f0f0">
-        <input type="text" class="form-control form-control-sm d-inline-block fw-bold border-0 bg-transparent" style="width:210px" value="${_iEsc(sec.title)}" oninput="inspState.sections[${si}].title=this.value">
-        <button class="btn btn-sm btn-outline-primary ms-2" style="padding:1px 8px;font-size:0.72rem" onclick="addInspGroup(${si})"><i class="bi bi-plus"></i> 항목추가</button>
-      </td>
-      <td style="background:#f0f0f0;text-align:center">
-        <button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="removeInspSection(${si})"><i class="bi bi-trash"></i></button>
-      </td>
-    </tr>`;
+    if (locked) {
+      html += `<tr class="insp-sec-hdr">
+        <td colspan="5" style="background:#f0f0f0">
+          <span class="fw-bold px-1">${_iEsc(sec.title)}</span>
+        </td>
+      </tr>`;
+    } else {
+      html += `<tr class="insp-sec-hdr">
+        <td colspan="5" style="background:#f0f0f0">
+          <input type="text" class="form-control form-control-sm d-inline-block fw-bold border-0 bg-transparent" style="width:210px" value="${_iEsc(sec.title)}" oninput="inspState.sections[${si}].title=this.value">
+          <button class="btn btn-sm btn-outline-primary ms-2" style="padding:1px 8px;font-size:0.72rem" onclick="addInspGroup(${si})"><i class="bi bi-plus"></i> 항목추가</button>
+        </td>
+        <td style="background:#f0f0f0;text-align:center">
+          <button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="removeInspSection(${si})"><i class="bi bi-trash"></i></button>
+        </td>
+      </tr>`;
+    }
 
-    if (!sec.groups.length) {
+    if (!sec.groups.length && !locked) {
       html += `<tr><td colspan="6" class="text-muted text-center py-2" style="font-size:0.8rem">항목을 추가하세요</td></tr>`;
     }
 
     sec.groups.forEach((grp, gi) => {
       const rc = grp.items.length;
       if (rc === 0) {
-        html += `<tr>
-          <td>
-            <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
-            <div class="d-flex gap-1 mt-1">
-              <button class="btn btn-sm btn-outline-primary" style="padding:0 5px;font-size:0.68rem" onclick="addInspItem(${si},${gi})"><i class="bi bi-plus"></i></button>
-              <button class="btn btn-sm btn-outline-danger"  style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i></button>
-            </div>
-          </td>
-          <td colspan="5" class="text-muted text-center" style="font-size:0.8rem">검사 항목을 추가하세요</td>
-        </tr>`;
+        if (!locked) {
+          html += `<tr>
+            <td>
+              <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
+              <div class="d-flex gap-1 mt-1">
+                <button class="btn btn-sm btn-outline-primary" style="padding:0 5px;font-size:0.68rem" onclick="addInspItem(${si},${gi})"><i class="bi bi-plus"></i></button>
+                <button class="btn btn-sm btn-outline-danger"  style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i></button>
+              </div>
+            </td>
+            <td colspan="5" class="text-muted text-center" style="font-size:0.8rem">검사 항목을 추가하세요</td>
+          </tr>`;
+        }
         return;
       }
       grp.items.forEach((item, ii) => {
         const jv = item.judgment;
         html += '<tr>';
         if (ii === 0) {
-          html += `<td rowspan="${rc + 1}" style="vertical-align:middle">
-            <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
-            <div class="mt-1">
-              <button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i> 삭제</button>
-            </div>
-          </td>`;
+          if (locked) {
+            html += `<td rowspan="${rc}" style="vertical-align:middle">
+              <div class="fw-semibold px-1 py-1">${_iEsc(grp.facility)}</div>
+            </td>`;
+          } else {
+            html += `<td rowspan="${rc + 1}" style="vertical-align:middle">
+              <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
+              <div class="mt-1">
+                <button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i> 삭제</button>
+              </div>
+            </td>`;
+          }
         }
-        html += `
-          <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.product)}" placeholder="검사 항목 내용" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].product=this.value"></td>
-          <td class="text-center p-1"><button id="ok_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='OK'?'btn-ok':'btn-outline-success'}" style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'OK')">OK</button></td>
-          <td class="text-center p-1"><button id="ng_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='NG'?'btn-ng':'btn-outline-danger'}"  style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'NG')">NG</button></td>
-          <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.note)}" placeholder="비고" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].note=this.value"></td>
-          <td class="text-center p-1"><button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspItem(${si},${gi},${ii})"><i class="bi bi-dash-lg"></i></button></td>
-        </tr>`;
+        if (locked) {
+          html += `
+            <td><div class="px-1 py-1">${_iEsc(item.product)||'&nbsp;'}</div></td>
+            <td class="text-center p-1"><button id="ok_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='OK'?'btn-ok':'btn-outline-success'}" style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'OK')">OK</button></td>
+            <td class="text-center p-1"><button id="ng_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='NG'?'btn-ng':'btn-outline-danger'}"  style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'NG')">NG</button></td>
+            <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.note)}" placeholder="비고" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].note=this.value"></td>
+          </tr>`;
+        } else {
+          html += `
+            <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.product)}" placeholder="검사 항목 내용" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].product=this.value"></td>
+            <td class="text-center p-1"><button id="ok_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='OK'?'btn-ok':'btn-outline-success'}" style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'OK')">OK</button></td>
+            <td class="text-center p-1"><button id="ng_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='NG'?'btn-ng':'btn-outline-danger'}"  style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'NG')">NG</button></td>
+            <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.note)}" placeholder="비고" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].note=this.value"></td>
+            <td class="text-center p-1"><button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspItem(${si},${gi},${ii})"><i class="bi bi-dash-lg"></i></button></td>
+          </tr>`;
+        }
       });
-      // 제품 검사 항목 추가 버튼 행
-      html += `<tr style="background:#f8fbff">
-        <td colspan="4" class="p-1 ps-2">
-          <button class="btn btn-sm btn-outline-primary" style="font-size:0.76rem;padding:2px 10px" onclick="addInspItem(${si},${gi})">
-            <i class="bi bi-plus-circle me-1"></i>제품 검사 항목 추가
-          </button>
-        </td>
-        <td></td>
-      </tr>`;
+      if (!locked) {
+        html += `<tr style="background:#f8fbff">
+          <td colspan="4" class="p-1 ps-2">
+            <button class="btn btn-sm btn-outline-primary" style="font-size:0.76rem;padding:2px 10px" onclick="addInspItem(${si},${gi})">
+              <i class="bi bi-plus-circle me-1"></i>제품 검사 항목 추가
+            </button>
+          </td>
+          <td></td>
+        </tr>`;
+      }
     });
   });
 
   html += '</tbody></table>';
   wrap.innerHTML = html;
+  // "섹션 추가" 버튼 표시 제어
+  const addSecBtn = wrap.nextElementSibling;
+  if (addSecBtn) addSecBtn.style.display = locked ? 'none' : '';
 }
 
 function setItemJudgment(si, gi, ii, val) {
