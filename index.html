@@ -876,7 +876,7 @@ async function migrateFromIndexedDB() {
     }
     clearModelCache();
     alert(`마이그레이션 완료!\n지그 ${jigs.length}개 · 이력 ${histories.length}개 · 점검 ${inspections.length}개 · 사용자 ${users.length}명`);
-    renderDashboard(); renderAllList();
+    await Promise.all([renderDashboard(), renderAllList(), renderByModel(), renderByCustomer()]);
   } catch(e) {
     console.error(e);
     alert('마이그레이션 오류: ' + e.message);
@@ -1982,7 +1982,7 @@ async function saveJig(returnId=false) {
     await dbAdd('history',{jigId:savedId,date:new Date().toISOString().split('T')[0],type:'등록',content:`${model} - ${name}`,createdAt:new Date().toISOString()});
   }
   bootstrap.Modal.getInstance(document.getElementById('jigModal')).hide();
-  renderDashboard(); renderAllList();
+  await Promise.all([renderDashboard(), renderAllList(), renderByModel(), renderByCustomer()]);
   if(!returnId) alert(id?'수정되었습니다!':'지그가 등록되었습니다!');
   return savedId;
 }
@@ -1994,7 +1994,7 @@ async function deleteJig(id) {
   await dbDelete('jigs',id);
   const hists=await dbGetAll('history','jigId',id); for(const h of hists) await dbDelete('history',h.id);
   const insps=await dbGetAll('inspections','jigId',id); for(const i of insps) await dbDelete('inspections',i.id);
-  renderAllList(); renderDashboard();
+  await Promise.all([renderDashboard(), renderAllList(), renderByModel(), renderByCustomer()]);
 }
 
 // ═══════════════════════════════════════
@@ -2036,7 +2036,7 @@ async function saveHistory() {
   if(type==='수리') { const jig=await dbGet('jigs',jigId); if(jig){ jig.status='수리중'; await dbPut('jigs',jig); } }
   await dbAdd('history',hist);
   bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
-  alert('이력이 저장되었습니다'); renderAllList(); renderDashboard();
+  alert('이력이 저장되었습니다'); await Promise.all([renderDashboard(), renderAllList(), renderByModel(), renderByCustomer()]);
 }
 
 // ═══════════════════════════════════════
