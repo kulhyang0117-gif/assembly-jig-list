@@ -1,0 +1,2365 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Assembly Jig List Management System</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root { --primary:#1a3a5c; --accent:#2e86de; --success:#27ae60; --warning:#f39c12; --danger:#e74c3c; --light-bg:#f0f4f8; }
+body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
+
+/* ── Login overlay ── */
+#loginOverlay { position:fixed; inset:0; background:linear-gradient(135deg,#1a3a5c,#2d5f8a); z-index:9000; display:flex; align-items:center; justify-content:center; }
+.login-card { background:white; border-radius:16px; padding:40px; width:100%; max-width:420px; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+.login-card .logo { text-align:center; margin-bottom:24px; }
+.login-card .logo i { font-size:3rem; color:var(--accent); }
+.login-card .logo h2 { font-size:1.3rem; font-weight:700; color:var(--primary); margin:8px 0 2px; }
+.login-card .logo small { color:#888; font-size:0.8rem; }
+.login-tab-btn { flex:1; padding:8px; border:none; background:#f0f4f8; cursor:pointer; font-size:0.9rem; transition:all 0.2s; }
+.login-tab-btn.active { background:var(--accent); color:white; font-weight:700; }
+.login-tab-btn:first-child { border-radius:8px 0 0 8px; }
+.login-tab-btn:last-child { border-radius:0 8px 8px 0; }
+
+/* ── Header ── */
+.app-header { background:linear-gradient(135deg,var(--primary) 0%,#2d5f8a 100%); color:white; padding:12px 24px; box-shadow:0 3px 10px rgba(0,0,0,0.2); }
+.app-header h1 { font-size:1.4rem; margin:0; font-weight:700; letter-spacing:1px; }
+.app-header .subtitle { font-size:0.75rem; opacity:0.75; }
+.user-info { font-size:0.82rem; display:flex; align-items:center; gap:8px; }
+.perm-badge { font-size:0.7rem; padding:2px 8px; border-radius:20px; font-weight:700; }
+.perm-admin    { background:#ffd700; color:#333; }
+.perm-full     { background:#90ee90; color:#155724; }
+.perm-register { background:#ffe5b4; color:#7d4e00; }
+.perm-readonly { background:#cfe2ff; color:#084298; }
+
+/* ── Sidebar ── */
+.sidebar { background:white; border-right:1px solid #dee2e6; min-height:calc(100vh - 62px); width:210px; flex-shrink:0; }
+.sidebar .nav-link { color:#495057; padding:11px 18px; border-radius:0; display:flex; align-items:center; gap:9px; font-size:0.88rem; transition:all 0.2s; }
+.sidebar .nav-link:hover,.sidebar .nav-link.active { background:var(--light-bg); color:var(--accent); border-left:3px solid var(--accent); font-weight:600; }
+.sidebar .nav-link i { width:18px; text-align:center; }
+.sidebar .nav-section { font-size:0.68rem; text-transform:uppercase; color:#adb5bd; padding:9px 18px 3px; letter-spacing:1px; }
+
+/* ── Main ── */
+.main-content { flex:1; padding:18px; overflow-x:auto; min-width:0; }
+
+/* ── Stats ── */
+.stat-card { background:white; border-radius:12px; padding:16px; box-shadow:0 2px 8px rgba(0,0,0,0.06); border-left:4px solid var(--accent); }
+.stat-card .stat-value { font-size:1.8rem; font-weight:700; color:var(--primary); }
+.stat-card .stat-label { font-size:0.78rem; color:#6c757d; }
+
+/* ── Table + Resizable ── */
+.jig-table { background:white; border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06); overflow:hidden; }
+.jig-table table { margin:0; font-size:0.84rem; table-layout:fixed; }
+.jig-table thead th { background:var(--primary); color:white; font-weight:600; padding:11px 8px; border:none; white-space:nowrap; position:relative; overflow:hidden; }
+.jig-table tbody tr:hover { background:#f8f9ff; }
+.jig-table td { vertical-align:middle; padding:9px 8px; border-color:#f0f0f0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.resize-handle { position:absolute; right:0; top:0; width:5px; height:100%; cursor:col-resize; user-select:none; background:rgba(255,255,255,0.15); }
+.resize-handle:hover { background:rgba(255,255,255,0.4); }
+.jig-table .thumb { width:44px; height:44px; object-fit:cover; border-radius:6px; cursor:pointer; }
+.jig-table .no-img { width:44px; height:44px; background:#eee; border-radius:6px; display:flex; align-items:center; justify-content:center; color:#aaa; }
+.thumb-sm { width:30px; height:30px; object-fit:cover; border-radius:4px; cursor:pointer; border:1px solid #dee2e6; transition:box-shadow 0.15s; }
+.thumb-sm:hover { box-shadow:0 0 0 2px var(--accent); }
+#thumbZoomOverlay { display:none; position:fixed; z-index:9500; width:200px; height:200px; object-fit:cover; border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,0.35); border:3px solid white; pointer-events:none; }
+#jigPreviewCard { display:none; position:fixed; z-index:9400; width:230px; background:white; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,0.22); border:1px solid #dee2e6; pointer-events:none; overflow:hidden; }
+#jigPreviewCard .preview-img { width:100%; height:150px; object-fit:cover; background:#f0f4f8; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:2rem; }
+#jigPreviewCard .preview-img img { width:100%; height:150px; object-fit:cover; }
+#jigPreviewCard .preview-body { padding:10px 12px; }
+#jigPreviewCard .preview-name { font-weight:700; font-size:0.88rem; color:var(--primary); margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+#jigPreviewCard .preview-row { font-size:0.78rem; color:#6c757d; display:flex; justify-content:space-between; margin-bottom:2px; }
+
+/* ── Badges ── */
+.badge-model { background:#e8f4fd; color:#1a6fa8; font-size:0.73rem; padding:2px 7px; border-radius:20px; font-weight:600; }
+.badge-qty { background:#e8f8e8; color:#1a7a2a; font-size:0.78rem; padding:2px 7px; border-radius:20px; font-weight:700; }
+.badge-status-normal { background:#d4edda; color:#155724; font-size:0.73rem; padding:2px 7px; border-radius:20px; }
+.badge-status-repair { background:#fff3cd; color:#856404; font-size:0.73rem; padding:2px 7px; border-radius:20px; }
+.badge-status-retired { background:#f8d7da; color:#842029; font-size:0.73rem; padding:2px 7px; border-radius:20px; }
+.badge-phase-dev { background:#fff3cd; color:#7d5a00; font-size:0.71rem; padding:2px 7px; border-radius:20px; font-weight:700; border:1px solid #ffc107; }
+.badge-phase-mass { background:#d1f5d3; color:#145a20; font-size:0.71rem; padding:2px 7px; border-radius:20px; font-weight:700; border:1px solid #28a745; }
+.badge-phase-eol { background:#e2e3e5; color:#41464b; font-size:0.71rem; padding:2px 7px; border-radius:20px; font-weight:700; border:1px solid #adb5bd; }
+
+/* ── Misc ── */
+.btn-action { padding:3px 7px; font-size:0.77rem; margin:1px; }
+.filter-bar { background:white; border-radius:10px; padding:12px; box-shadow:0 2px 8px rgba(0,0,0,0.06); margin-bottom:14px; }
+.filter-bar .form-control,.filter-bar .form-select { font-size:0.84rem; }
+.modal-header { background:var(--primary); color:white; }
+.modal-header .btn-close { filter:invert(1); }
+.modal .form-label { font-weight:600; font-size:0.84rem; color:#495057; }
+.section-divider { border-bottom:2px solid var(--light-bg); padding-bottom:6px; margin-bottom:14px; font-weight:700; color:var(--primary); font-size:0.88rem; }
+.photo-grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+.photo-thumb { position:relative; width:76px; height:76px; }
+.photo-thumb img { width:76px; height:76px; object-fit:cover; border-radius:8px; cursor:pointer; border:2px solid #dee2e6; }
+.photo-thumb .del-photo { position:absolute; top:-5px; right:-5px; background:var(--danger); color:white; border:none; border-radius:50%; width:19px; height:19px; font-size:0.68rem; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.history-item { border-left:3px solid var(--accent); padding:7px 11px; margin-bottom:7px; background:white; border-radius:0 8px 8px 0; font-size:0.84rem; }
+.history-item .h-date { color:#adb5bd; font-size:0.73rem; }
+.history-item .h-type { font-weight:700; color:var(--accent); }
+.history-move { border-left-color:var(--warning); } .history-move .h-type { color:var(--warning); }
+.history-repair { border-left-color:var(--danger); } .history-repair .h-type { color:var(--danger); }
+.history-inspect { border-left-color:var(--success); } .history-inspect .h-type { color:var(--success); }
+.lightbox { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; display:none; align-items:center; justify-content:center; }
+.lightbox.show { display:flex; }
+.lightbox img { max-width:90vw; max-height:90vh; border-radius:8px; }
+.lightbox-close { position:absolute; top:20px; right:30px; color:white; font-size:2rem; cursor:pointer; }
+.excel-file-item { background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:9px 12px; margin-bottom:7px; display:flex; align-items:center; gap:9px; font-size:0.84rem; }
+.excel-file-item .file-icon { color:#217346; font-size:1.4rem; }
+.page { display:none; } .page.active { display:block; }
+.model-group-header { background:linear-gradient(90deg,var(--primary),var(--accent)); color:white; padding:7px 14px; border-radius:8px 8px 0 0; font-weight:700; font-size:0.88rem; }
+.model-group-body { background:white; border-radius:0 0 8px 8px; margin-bottom:14px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+.drop-zone { border:2px dashed #adb5bd; border-radius:10px; padding:18px; text-align:center; color:#6c757d; cursor:pointer; transition:all 0.2s; }
+.drop-zone:hover,.drop-zone.dragover { border-color:var(--accent); background:#f0f8ff; color:var(--accent); }
+.drop-zone i { font-size:1.8rem; margin-bottom:6px; display:block; }
+.qty-input { width:70px; text-align:center; }
+.autocomplete-wrapper { position:relative; }
+.autocomplete-dropdown { position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #dee2e6; border-top:none; border-radius:0 0 8px 8px; max-height:230px; overflow-y:auto; z-index:1060; box-shadow:0 6px 16px rgba(0,0,0,0.12); display:none; }
+.autocomplete-dropdown.show { display:block; }
+.autocomplete-item { padding:7px 12px; cursor:pointer; font-size:0.84rem; border-bottom:1px solid #f0f0f0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.autocomplete-item:hover { background:var(--light-bg); color:var(--accent); }
+.autocomplete-item mark { background:#fff3cd; padding:0 2px; border-radius:2px; font-style:normal; }
+.model-tag { display:inline-flex; align-items:center; gap:4px; background:#e8f4fd; color:#1a6fa8; border:1px solid #9ecbf0; border-radius:20px; padding:2px 8px 2px 10px; font-size:0.78rem; font-weight:600; }
+.model-tag .tag-del { background:none; border:none; color:#6c9ec4; cursor:pointer; padding:0 0 0 2px; font-size:0.75rem; line-height:1; }
+.model-tag .tag-del:hover { color:#e74c3c; }
+.bom-file-badge { background:#e8f8e8; border:1px solid #28a745; border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:10px; font-size:0.85rem; }
+.bom-file-badge i { color:#217346; font-size:1.4rem; }
+/* ── Inspection Sheet ── */
+.insp-img-box { border:2px dashed #dee2e6; border-radius:8px; height:130px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; gap:4px; overflow:hidden; transition:all 0.2s; }
+.insp-img-box:hover { border-color:var(--accent); background:#f0f8ff; }
+.insp-img-box:focus { outline:none; border-color:var(--accent); background:#e8f4fd; box-shadow:0 0 0 3px rgba(46,134,222,0.2); }
+.insp-img-box.insp-img-selected { border-color:var(--accent); border-style:solid; background:#e8f4fd; }
+.insp-img-box img { width:100%; height:130px; object-fit:contain; }
+.insp-sec-hdr { background:#f0f0f0; font-weight:700; }
+.btn-ok  { background:#27ae60; color:white !important; border-color:#27ae60; }
+.btn-ok:hover  { background:#1e8449; border-color:#1e8449; }
+.btn-ng  { background:#e74c3c; color:white !important; border-color:#e74c3c; }
+.btn-ng:hover  { background:#c0392b; border-color:#c0392b; }
+.insp-table th { background:#ffeb3b; color:#333; font-weight:700; text-align:center; vertical-align:middle; }
+.insp-table td { vertical-align:middle; }
+.insp-history-item { padding:10px 14px; border-bottom:1px solid #f0f0f0; font-size:0.84rem; cursor:pointer; }
+.insp-history-item:hover { background:#f8f9ff; }
+
+/* ── User management ── */
+.user-row { display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:8px; margin-bottom:6px; border:1px solid #dee2e6; background:white; }
+.user-row .user-email { flex:1; font-size:0.85rem; font-weight:600; }
+.user-row .user-name { color:#6c757d; font-size:0.8rem; }
+.status-pending { background:#fff3cd; color:#856404; font-size:0.72rem; padding:2px 8px; border-radius:20px; font-weight:600; }
+.status-approved { background:#d4edda; color:#155724; font-size:0.72rem; padding:2px 8px; border-radius:20px; font-weight:600; }
+.status-rejected { background:#f8d7da; color:#842029; font-size:0.72rem; padding:2px 8px; border-radius:20px; font-weight:600; }
+
+@media (max-width:768px) { .sidebar { display:none; } }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN OVERLAY ══════════════ -->
+<div id="loginOverlay">
+  <div class="login-card">
+    <div class="logo">
+      <i class="bi bi-tools"></i>
+      <h2>Assembly Jig List</h2>
+      <small>지그 관리 시스템</small>
+    </div>
+    <div class="d-flex mb-3">
+      <button class="login-tab-btn active" id="tabLogin" onclick="switchTab('login')">로그인</button>
+      <button class="login-tab-btn" id="tabRegister" onclick="switchTab('register')">회원가입</button>
+    </div>
+
+    <!-- Login form -->
+    <div id="loginForm">
+      <div class="mb-3">
+        <label class="form-label fw-bold small">이메일</label>
+        <input type="email" class="form-control" id="loginEmail" placeholder="이메일 주소">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold small">비밀번호</label>
+        <input type="password" class="form-control" id="loginPw" placeholder="비밀번호" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="mb-3 d-flex align-items-center">
+        <input type="checkbox" class="form-check-input me-2" id="rememberMe">
+        <label class="form-check-label small" for="rememberMe">이메일 / 비밀번호 저장</label>
+      </div>
+      <div id="loginMsg" class="mb-2"></div>
+      <button class="btn btn-primary w-100 fw-bold" onclick="doLogin()"><i class="bi bi-box-arrow-in-right me-2"></i>로그인</button>
+    </div>
+
+    <!-- Register form -->
+    <div id="registerForm" style="display:none">
+      <div class="mb-3">
+        <label class="form-label fw-bold small">이름</label>
+        <input type="text" class="form-control" id="regName" placeholder="이름">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold small">이메일</label>
+        <input type="email" class="form-control" id="regEmail" placeholder="이메일 주소">
+      </div>
+      <div class="mb-3">
+        <label class="form-label fw-bold small">비밀번호</label>
+        <input type="password" class="form-control" id="regPw" placeholder="비밀번호 (6자 이상)">
+      </div>
+      <div id="registerMsg" class="mb-2"></div>
+      <button class="btn btn-success w-100 fw-bold" onclick="doRegister()"><i class="bi bi-person-plus me-2"></i>가입 신청</button>
+      <div class="mt-2 text-muted small text-center">관리자 승인 후 로그인 가능합니다</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════ MAIN APP ══════════════ -->
+<div id="mainApp" style="display:none">
+
+<!-- Header -->
+<div class="app-header d-flex align-items-center justify-content-between">
+  <div>
+    <h1><i class="bi bi-tools me-2"></i>Assembly Jig List Management</h1>
+    <div class="subtitle">지그 관리 시스템 · 이력 추적 · 점검 관리</div>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <div class="user-info text-white-50">
+      <i class="bi bi-person-circle"></i>
+      <span id="headerUserName"></span>
+      <span id="headerPermBadge"></span>
+    </div>
+    <button class="btn btn-sm btn-outline-light" onclick="exportAllExcel()"><i class="bi bi-download me-1"></i>내보내기</button>
+    <button class="btn btn-sm btn-light text-primary fw-bold" onclick="showAddModal()" id="btnAddJig"><i class="bi bi-plus-lg me-1"></i>지그 등록</button>
+    <button class="btn btn-sm btn-outline-light" onclick="doLogout()"><i class="bi bi-box-arrow-right"></i></button>
+  </div>
+</div>
+
+<!-- Layout -->
+<div class="d-flex">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="nav-section mt-2">메뉴</div>
+    <a href="#" class="nav-link active" onclick="showPage('dashboard',this)"><i class="bi bi-grid-3x3-gap"></i>대시보드</a>
+    <a href="#" class="nav-link" onclick="showPage('allList',this)"><i class="bi bi-list-ul"></i>전체 지그 목록</a>
+    <a href="#" class="nav-link" onclick="showPage('byModel',this)"><i class="bi bi-layers"></i>모델별 보기</a>
+    <a href="#" class="nav-link" onclick="showPage('byCustomer',this)"><i class="bi bi-building"></i>고객사별 보기</a>
+    <div class="nav-section mt-2">관리</div>
+    <a href="#" class="nav-link" onclick="showPage('standards',this)"><i class="bi bi-clipboard2-check"></i>관리기준</a>
+    <a href="#" class="nav-link" onclick="showPage('inspection',this)"><i class="bi bi-file-earmark-check"></i>점검 시트</a>
+    <a href="#" class="nav-link" onclick="showPage('history',this)"><i class="bi bi-clock-history"></i>이력 관리</a>
+    <div class="nav-section mt-2">시스템</div>
+    <a href="#" class="nav-link" onclick="showPage('bomUpload',this)"><i class="bi bi-upload"></i>파일 업로드</a>
+    <a href="#" class="nav-link" onclick="showPage('settings',this)"><i class="bi bi-gear"></i>설정</a>
+    <a href="#" class="nav-link" id="navUsers" onclick="showPage('users',this)" style="display:none"><i class="bi bi-people"></i>사용자 관리</a>
+  </nav>
+
+  <!-- Main -->
+  <div class="main-content">
+
+    <!-- Dashboard -->
+    <div id="page-dashboard" class="page active">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>대시보드</h5>
+        <small class="text-muted" id="lastUpdated"></small>
+      </div>
+      <div class="row g-3 mb-4" id="statsRow"></div>
+      <div class="jig-table">
+        <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+          <span class="fw-bold"><i class="bi bi-table me-2 text-primary"></i>전체 지그 현황</span>
+          <button class="btn btn-sm btn-primary" onclick="showPage('allList',document.querySelectorAll('.nav-link')[2])">전체보기 →</button>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover" id="dashTable">
+            <thead><tr>
+              <th style="width:52px">사진</th><th style="width:110px">모델명</th><th style="width:70px">단계</th>
+              <th>지그명</th><th style="width:70px">수량</th><th>보관위치</th>
+              <th style="width:70px">상태</th><th>제조사</th><th style="width:90px">입고일</th><th style="width:90px">마지막점검</th><th style="width:80px">작업</th>
+            </tr></thead>
+            <tbody id="dashTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- All List -->
+    <div id="page-allList" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-list-ul me-2 text-primary"></i>전체 지그 목록</h5>
+        <button class="btn btn-sm btn-success" onclick="showAddModal()" id="btnAddJig2"><i class="bi bi-plus-lg me-1"></i>지그 등록</button>
+      </div>
+      <div class="filter-bar mb-3">
+        <div class="row g-2 align-items-end">
+          <div class="col-md-3"><label class="form-label mb-1 small text-muted">검색</label>
+            <input type="text" class="form-control form-control-sm" id="searchInput" placeholder="모델명, 지그명, 위치..." oninput="renderAllList()"></div>
+          <div class="col-md-2"><label class="form-label mb-1 small text-muted">모델</label>
+            <select class="form-select form-select-sm" id="filterModel" onchange="renderAllList()"><option value="">전체 모델</option></select></div>
+          <div class="col-md-2"><label class="form-label mb-1 small text-muted">단계</label>
+            <select class="form-select form-select-sm" id="filterPhase" onchange="renderAllList()">
+              <option value="">전체</option><option value="개발">개발</option><option value="양산">양산</option><option value="단종">단종</option></select></div>
+          <div class="col-md-2"><label class="form-label mb-1 small text-muted">보관위치</label>
+            <select class="form-select form-select-sm" id="filterLocation" onchange="renderAllList()"><option value="">전체 위치</option></select></div>
+          <div class="col-md-2"><label class="form-label mb-1 small text-muted">상태</label>
+            <select class="form-select form-select-sm" id="filterStatus" onchange="renderAllList()">
+              <option value="">전체</option><option value="정상">정상</option><option value="수리중">수리중</option><option value="폐기">폐기</option></select></div>
+          <div class="col-md-1"><label class="form-label mb-1 small text-muted">초기화</label>
+            <button class="btn btn-sm btn-outline-secondary w-100" onclick="clearFilters()"><i class="bi bi-x-lg"></i></button></div>
+        </div>
+      </div>
+      <div class="jig-table">
+        <div class="table-responsive">
+          <table class="table table-hover" id="allListTable">
+            <thead><tr>
+              <th style="width:52px">사진</th><th style="width:110px">모델명</th><th style="width:68px">단계</th>
+              <th>지그명</th><th style="width:68px">수량</th><th>보관위치</th>
+              <th style="width:68px">상태</th><th>제조사</th><th>담당자</th><th>연락처</th>
+              <th style="width:88px">입고일자</th><th style="width:88px">마지막점검</th><th style="width:120px">작업</th>
+            </tr></thead>
+            <tbody id="allListBody"></tbody>
+          </table>
+        </div>
+        <div class="p-2 border-top text-muted small" id="listCount"></div>
+      </div>
+    </div>
+
+    <!-- By Model -->
+    <div id="page-byModel" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-layers me-2 text-primary"></i>모델별 지그 보기</h5>
+        <button class="btn btn-sm btn-success" onclick="showAddModal()"><i class="bi bi-plus-lg me-1"></i>지그 등록</button>
+      </div>
+      <div id="byModelContent"></div>
+    </div>
+
+    <!-- By Customer -->
+    <div id="page-byCustomer" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-building me-2 text-primary"></i>고객사별 지그 보기</h5>
+        <button class="btn btn-sm btn-success" onclick="showAddModal()"><i class="bi bi-plus-lg me-1"></i>지그 등록</button>
+      </div>
+      <div id="byCustomerContent"></div>
+    </div>
+
+    <!-- History -->
+    <div id="page-history" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2 text-primary"></i>이력 관리</h5>
+      </div>
+      <div class="filter-bar mb-3">
+        <div class="row g-2">
+          <div class="col-md-3"><select class="form-select form-select-sm" id="histFilterJig" onchange="renderHistory()"><option value="">전체 지그</option></select></div>
+          <div class="col-md-2"><select class="form-select form-select-sm" id="histFilterType" onchange="renderHistory()">
+            <option value="">전체 유형</option><option value="등록">등록</option><option value="수정">수정</option>
+            <option value="위치이동">위치이동</option><option value="수리">수리</option><option value="점검">점검</option><option value="수량변경">수량변경</option></select></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="histFromDate" onchange="renderHistory()"></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="histToDate" onchange="renderHistory()"></div>
+        </div>
+      </div>
+      <div id="historyContent"></div>
+    </div>
+
+    <!-- Inspection -->
+    <div id="page-inspection" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-file-earmark-check me-2 text-primary"></i>점검 시트</h5>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="newInspectionSheet()"><i class="bi bi-file-earmark-plus me-1"></i>새 점검</button>
+          <button class="btn btn-sm btn-primary" onclick="saveInspectionSheet()"><i class="bi bi-save me-1"></i>저장</button>
+        </div>
+      </div>
+      <div class="row g-3">
+        <!-- 기본 정보 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                  <label class="form-label fw-bold small mb-1">대상 지그</label>
+                  <select class="form-select form-select-sm" id="inspJigSelect" onchange="onInspJigChange()"></select>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label fw-bold small mb-1">점검일자</label>
+                  <input type="date" class="form-control form-control-sm" id="inspDate">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label fw-bold small mb-1">관리번호</label>
+                  <input type="text" class="form-control form-control-sm" id="inspMgmtNo" placeholder="예: SSA-23-ccRC-JX1 FL 1">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-bold small mb-1">결재 (작성 / 검토 / 승인)</label>
+                  <div class="d-flex gap-1">
+                    <input type="text" class="form-control form-control-sm" id="inspSign1" placeholder="작성">
+                    <input type="text" class="form-control form-control-sm" id="inspSign2" placeholder="검토">
+                    <input type="text" class="form-control form-control-sm" id="inspSign3" placeholder="승인">
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 이미지 섹션 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body py-2">
+              <div class="row g-2 align-items-center text-center">
+                <div class="col">
+                  <div class="fw-bold small mb-1">제품</div>
+                  <div class="insp-img-box" id="inspImgBox1" tabindex="0"
+                    onclick="focusInspImg(1);document.getElementById('inspImgFile1').click()"
+                    onfocus="lastFocusedInspImg=1" onkeydown="if(event.key==='Enter')document.getElementById('inspImgFile1').click()">
+                    <i class="bi bi-camera fs-4 text-muted"></i><div class="small text-muted">클릭 또는 Ctrl+V</div>
+                  </div>
+                  <input type="file" id="inspImgFile1" style="display:none" accept="image/*" onchange="loadInspImg(1,this)">
+                  <button class="btn btn-outline-danger btn-sm mt-1" style="font-size:0.7rem;padding:1px 6px;display:none" id="inspImgDel1" onclick="clearInspImg(1)"><i class="bi bi-trash"></i></button>
+                </div>
+                <div class="col-auto text-muted"><i class="bi bi-arrow-right fs-3"></i></div>
+                <div class="col">
+                  <div class="fw-bold small mb-1">지그 안착전</div>
+                  <div class="insp-img-box" id="inspImgBox2" tabindex="0"
+                    onclick="focusInspImg(2);document.getElementById('inspImgFile2').click()"
+                    onfocus="lastFocusedInspImg=2" onkeydown="if(event.key==='Enter')document.getElementById('inspImgFile2').click()">
+                    <i class="bi bi-camera fs-4 text-muted"></i><div class="small text-muted">클릭 또는 Ctrl+V</div>
+                  </div>
+                  <input type="file" id="inspImgFile2" style="display:none" accept="image/*" onchange="loadInspImg(2,this)">
+                  <button class="btn btn-outline-danger btn-sm mt-1" style="font-size:0.7rem;padding:1px 6px;display:none" id="inspImgDel2" onclick="clearInspImg(2)"><i class="bi bi-trash"></i></button>
+                </div>
+                <div class="col-auto text-muted"><i class="bi bi-arrow-right fs-3"></i></div>
+                <div class="col">
+                  <div class="fw-bold small mb-1">지그 안착후</div>
+                  <div class="insp-img-box" id="inspImgBox3" tabindex="0"
+                    onclick="focusInspImg(3);document.getElementById('inspImgFile3').click()"
+                    onfocus="lastFocusedInspImg=3" onkeydown="if(event.key==='Enter')document.getElementById('inspImgFile3').click()">
+                    <i class="bi bi-camera fs-4 text-muted"></i><div class="small text-muted">클릭 또는 Ctrl+V</div>
+                  </div>
+                  <input type="file" id="inspImgFile3" style="display:none" accept="image/*" onchange="loadInspImg(3,this)">
+                  <button class="btn btn-outline-danger btn-sm mt-1" style="font-size:0.7rem;padding:1px 6px;display:none" id="inspImgDel3" onclick="clearInspImg(3)"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 점검 테이블 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-body p-0">
+              <div id="inspSectionsWrapper" class="table-responsive"></div>
+              <div class="p-2 border-top" style="background:#fafafa">
+                <button class="btn btn-sm btn-outline-primary" onclick="addInspSection()"><i class="bi bi-plus-circle me-1"></i>섹션 추가</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 점검 이력 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa"><i class="bi bi-clock-history me-2"></i>점검 이력</div>
+            <div class="card-body p-0" id="inspectionList" style="max-height:360px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div id="page-settings" class="page">
+      <h5 class="mb-3 fw-bold"><i class="bi bi-gear me-2 text-primary"></i>설정</h5>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa">모델 관리</div>
+            <div class="card-body">
+              <div class="input-group mb-2">
+                <input type="text" class="form-control" id="newModelInput" placeholder="모델명 입력">
+                <button class="btn btn-primary" onclick="addModel()"><i class="bi bi-plus"></i>추가</button>
+              </div>
+              <div id="modelList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa">보관위치 관리</div>
+            <div class="card-body">
+              <div class="input-group mb-2">
+                <input type="text" class="form-control" id="newLocationInput" placeholder="위치명 입력">
+                <button class="btn btn-primary" onclick="addLocation()"><i class="bi bi-plus"></i>추가</button>
+              </div>
+              <div id="locationList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa">데이터 관리</div>
+            <div class="card-body">
+              <button class="btn btn-outline-primary mb-2 w-100" onclick="exportData()"><i class="bi bi-upload me-2"></i>JSON 백업</button>
+              <div class="input-group mb-2">
+                <input type="file" class="form-control" id="importFile" accept=".json">
+                <button class="btn btn-outline-secondary" onclick="importData()"><i class="bi bi-download me-2"></i>복원</button>
+              </div>
+              <button class="btn btn-outline-danger w-100" id="btnClearData" onclick="clearAllData()"><i class="bi bi-trash me-2"></i>전체 초기화</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Standards (관리기준) -->
+    <div id="page-standards" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-clipboard2-check me-2 text-primary"></i>관리기준</h5>
+        <button class="btn btn-primary btn-sm" onclick="saveStandards()"><i class="bi bi-save me-1"></i>저장</button>
+      </div>
+      <div class="row g-3">
+
+        <!-- 설비관리 절차서 (SSC-PR-02) -->
+        <div class="col-12">
+          <div class="card shadow-sm border-primary">
+            <div class="card-header fw-bold text-white" style="background:#1a3a5c"><i class="bi bi-file-earmark-text me-2"></i>설비관리 절차서 (SSC-PR-02) — 신성오토텍</div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light"><tr><th style="width:150px">항목</th><th>내용</th></tr></thead>
+                <tbody>
+                  <tr><td><strong>문서번호</strong></td><td>SSC-PR-02</td></tr>
+                  <tr><td><strong>관리부서</strong></td><td>조립팀</td></tr>
+                  <tr><td><strong>적용범위</strong></td><td>제품의 생산활동에 기여하는 지그에 대하여 도입부터 폐기까지의 제반활동 사항(제조, 검사)에 필요한 지그의 일상점검(년/월간점검)에 대하여 적용한다.</td></tr>
+                  <tr><td><strong>프로세스 책임자</strong></td><td>조립팀장</td></tr>
+                  <tr><td><strong>모니터링 지표</strong></td><td>지그 고장율 · 지그 수리비용</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa"><i class="bi bi-list-check me-2 text-success"></i>설비관리 절차 기준 (신성오토텍 SSC-PR-02)</div>
+            <div class="card-body p-0">
+              <table class="table table-sm table-bordered mb-0">
+                <thead class="table-light">
+                  <tr><th style="width:160px">절차</th><th>관리 기준 내용</th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="badge bg-primary">신규 지그 도입</span></td>
+                    <td>현 지그의 생산 CAPA 대비 부족 CAPA를 분석하고 필요한 지그의 기종, 사양, 수량 등을 검토한다. 지그 발주 시에는 복수견적서를 받고 경영진의 승인을 득한 후 발주한다. 보고서에 이력 관리할 것.</td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-secondary">지그 등록</span></td>
+                    <td>지그등록대장에 등록한다. [사양, 제조일자, 구입가격 등 양식에 준하는 내용]</td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-info text-dark">예방보존계획 수립</span></td>
+                    <td>조립팀장은 등록된 지그에 대해 중점 관리항목을 기준으로 점검항목 및 지그예방보존계획을 수립한다. 중점관리항목은 지그의 중요기능에 관해 제조업체의 필수 점검 항목을 말한다.<br>지그중요도 평가 실시 후 예방보존계획 수립 시 반영토록 한다. [HMC 고객요구사항]<br>전년도 지그의 고장 및 이력사항을 검토하여 예방보존계획에 추가 또는 불필요한 항목은 삭제한다.<br><small class="text-muted">※ 매년 12월말까지 익년도 예방보존계획 수립 후 경영진 승인</small></td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-success">일상점검 실시</span></td>
+                    <td>일상점검표는 각 지그에 부착하여 눈으로 보는 관리를 하고, 지그관리담당은 매일 점검을 실시하여 이상유무를 기록한다. 점검표 기록 시에는 구체적인 수치를 기록한다. 점검항목 외 이상소음, 과다한 발열, 작동상태 등을 잘 살피도록 한다.</td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-warning text-dark">수리 및 조치</span></td>
+                    <td>자체수리를 실시하고, 자체수리 불가한 경우 제조업체에 AS를 요청한다. 지그의 수리내역은 지그이력대장에 기록한다.</td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-danger">지속적 개선</span></td>
+                    <td>지그 성능이 유지·향상될 수 있도록 지속적인 지그개선을 실시하고, 중요부품은 여유분을 확보하여 지그고장으로 인한 생산 중단이 없도록 한다.</td>
+                  </tr>
+                  <tr>
+                    <td><span class="badge bg-dark">비상계획 수립</span></td>
+                    <td>천재지변이나 돌발사고에 의한 비상사태 발생 시 비상사태대응지침서를 참고하여 대응한다.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOM 파일 업로드 -->
+    <div id="page-bomUpload" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-upload me-2 text-primary"></i>파일 업로드</h5>
+      </div>
+      <div class="row g-3">
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa"><i class="bi bi-file-earmark-excel me-2 text-success"></i>BOM 파일 업로드</div>
+            <div class="card-body">
+              <p class="text-muted small mb-3">Excel BOM 파일(xlsx)을 업로드하면 <strong>제품코드</strong> 시트의 <strong>제품명</strong> 목록을 불러와 지그 등록 시 모델명으로 사용합니다.</p>
+              <div class="drop-zone mb-3" id="bomDropZone" onclick="document.getElementById('bomFileInput').click()"
+                ondragover="event.preventDefault();this.classList.add('dragover')"
+                ondragleave="this.classList.remove('dragover')"
+                ondrop="event.preventDefault();this.classList.remove('dragover');handleBomDrop(event)">
+                <i class="bi bi-file-earmark-arrow-up"></i>
+                <div>BOM 파일 드래그 또는 클릭하여 선택</div>
+                <small class="text-muted">xlsx 형식 지원</small>
+              </div>
+              <input type="file" id="bomFileInput" accept=".xlsx,.xls" style="display:none" onchange="uploadBomFile(this.files[0])">
+              <div id="bomStatus"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Users (admin only) -->
+    <div id="page-users" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-people me-2 text-primary"></i>사용자 관리</h5>
+        <span class="badge bg-warning text-dark"><i class="bi bi-shield-lock me-1"></i>관리자 전용</span>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold d-flex justify-content-between" style="background:#fff3cd">
+              <span><i class="bi bi-hourglass me-2 text-warning"></i>승인 대기</span>
+              <span class="badge bg-warning text-dark" id="pendingCount">0</span>
+            </div>
+            <div class="card-body" id="pendingUsers" style="max-height:400px;overflow-y:auto"></div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#d4edda">
+              <i class="bi bi-people-fill me-2 text-success"></i>승인된 사용자
+            </div>
+            <div class="card-body" id="approvedUsers" style="max-height:400px;overflow-y:auto"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /main-content -->
+</div><!-- /d-flex -->
+</div><!-- /mainApp -->
+
+<!-- ══ Add/Edit Jig Modal ══ -->
+<div class="modal fade" id="jigModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalTitle"><i class="bi bi-tools me-2"></i>지그 등록</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="section-divider"><i class="bi bi-info-circle me-2"></i>기본 정보</div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-6">
+            <label class="form-label d-flex align-items-center gap-2">
+              모델명 <span class="text-danger">*</span>
+              <span class="d-flex align-items-center gap-1 fw-normal">
+                <input type="checkbox" class="form-check-input mt-0" id="fIsShared" onchange="toggleSharedMode()">
+                <label for="fIsShared" class="mb-0 text-muted" style="font-size:0.79rem;cursor:pointer">공용지그 (복수선택)</label>
+              </span>
+            </label>
+            <div class="autocomplete-wrapper">
+              <div id="fModelTags" class="d-flex flex-wrap gap-1 mb-1"></div>
+              <input type="text" class="form-control" id="fModelInput" placeholder="모델명 검색 (예: J)..." autocomplete="off"
+                oninput="filterModelDropdown(this.value)" onfocus="filterModelDropdown(this.value)">
+              <input type="hidden" id="fModel">
+              <div id="fModelDropdown" class="autocomplete-dropdown"></div>
+            </div>
+          </div>
+          <div class="col-md-6"><label class="form-label">지그명 <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="fName" placeholder="예: 바디 고정지그 A"></div>
+          <div class="col-md-4"><label class="form-label">보유수량</label>
+            <input type="number" class="form-control qty-input" id="fQty" min="0" value="1"></div>
+          <div class="col-md-4"><label class="form-label">보관위치</label>
+            <div class="input-group"><select class="form-select" id="fLocation"></select>
+              <button class="btn btn-outline-secondary" onclick="quickAddLocation()"><i class="bi bi-plus"></i></button></div></div>
+          <div class="col-md-4"><label class="form-label">입고일자</label>
+            <input type="date" class="form-control" id="fDate"></div>
+          <div class="col-md-6"><label class="form-label">고객사</label>
+            <select class="form-select" id="fCustomer">
+              <option value="">-- 선택 --</option>
+              <option value="LG전자">LG전자</option>
+              <option value="모트렉스">모트렉스</option>
+              <option value="동아전기">동아전기</option>
+              <option value="동국실업">동국실업</option>
+            </select></div>
+          <div class="col-md-3"><label class="form-label">단계</label>
+            <select class="form-select" id="fPhase"><option value="개발">개발</option><option value="양산">양산</option><option value="단종">단종</option></select></div>
+          <div class="col-md-3"><label class="form-label">상태</label>
+            <select class="form-select" id="fStatus"><option>정상</option><option>수리중</option><option>폐기</option></select></div>
+          <div class="col-12"><label class="form-label">비고</label>
+            <input type="text" class="form-control" id="fNote"></div>
+        </div>
+        <div class="section-divider"><i class="bi bi-building me-2"></i>제조사 정보</div>
+        <div class="row g-3 mb-3">
+          <div class="col-md-4"><label class="form-label">제조사</label><input type="text" class="form-control" id="fMaker"></div>
+          <div class="col-md-4"><label class="form-label">담당자</label><input type="text" class="form-control" id="fContact"></div>
+          <div class="col-md-4"><label class="form-label">연락처</label><input type="text" class="form-control" id="fPhone"></div>
+        </div>
+        <div class="section-divider"><i class="bi bi-images me-2"></i>사진</div>
+        <div class="drop-zone mb-2" onclick="document.getElementById('photoInput').click()"
+          ondragover="handleDragOver(event,'photoDrop')" ondragleave="handleDragLeave('photoDrop')" ondrop="handlePhotoDrop(event)" id="photoDrop">
+          <i class="bi bi-camera"></i><div>사진 드래그 또는 클릭</div><small class="text-muted">여러 장 가능 · Ctrl+V 붙여넣기 가능</small>
+        </div>
+        <input type="file" id="photoInput" multiple accept="image/*" style="display:none" onchange="handlePhotoSelect(event)">
+        <div class="photo-grid" id="photoGrid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-info text-white" id="btnJigInspSheet" onclick="saveJigThenInspect()"><i class="bi bi-clipboard2-check me-1"></i>저장 후 점검시트</button>
+        <button class="btn btn-primary" onclick="saveJig()"><i class="bi bi-save me-2"></i>저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ History Modal ══ -->
+<div class="modal fade" id="historyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>이력 추가</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="histJigId">
+        <div class="mb-3"><label class="form-label fw-bold">이력 유형</label>
+          <select class="form-select" id="histType" onchange="toggleHistFields()">
+            <option value="위치이동">위치이동</option><option value="수리">수리</option>
+            <option value="수량변경">수량변경</option><option value="기타">기타</option></select></div>
+        <div class="mb-3"><label class="form-label fw-bold">일자</label><input type="date" class="form-control" id="histDate"></div>
+        <div class="mb-3" id="histLocationField"><label class="form-label fw-bold">이동 위치</label>
+          <select class="form-select" id="histNewLocation"></select></div>
+        <div class="mb-3" id="histQtyField" style="display:none"><label class="form-label fw-bold">변경 수량</label>
+          <input type="number" class="form-control" id="histQty" min="0"></div>
+        <div class="mb-3"><label class="form-label fw-bold">내용</label>
+          <textarea class="form-control" id="histContent" rows="3"></textarea></div>
+        <div class="mb-3"><label class="form-label fw-bold">담당자</label>
+          <input type="text" class="form-control" id="histWorker"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+        <button class="btn btn-primary" onclick="saveHistory()"><i class="bi bi-save me-2"></i>저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ Detail Modal ══ -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title" id="detailTitle">지그 상세</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <span class="lightbox-close">&times;</span>
+  <img id="lightboxImg" src="" alt="">
+</div>
+<img id="thumbZoomOverlay" src="" alt="">
+<div id="jigPreviewCard">
+  <div class="preview-img" id="jigPreviewImg"><i class="bi bi-tools"></i></div>
+  <div class="preview-body">
+    <div class="preview-name" id="jigPreviewName"></div>
+    <div class="preview-row"><span id="jigPreviewModel"></span><span id="jigPreviewPhase"></span></div>
+    <div class="preview-row"><span id="jigPreviewLoc"></span><span id="jigPreviewStatus"></span></div>
+    <div class="preview-row"><span class="text-muted">수량</span><span id="jigPreviewQty"></span></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ═══════════════════════════════════════
+// GLOBALS
+// ═══════════════════════════════════════
+let db;
+let currentUser = null;
+let currentPhotos = [];
+let currentModels = [];
+let pendingExcelFile = null;
+const ADMIN_EMAIL = 'kulhyang0117@gmail.com';
+const ADMIN_PW    = 'jxy0830!';
+
+// ═══════════════════════════════════════
+// INDEXEDDB
+// ═══════════════════════════════════════
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('JigManagementDB', 4);
+    req.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains('jigs')) {
+        const s = d.createObjectStore('jigs', { keyPath:'id', autoIncrement:true });
+        s.createIndex('model','model',{unique:false});
+      }
+      if (!d.objectStoreNames.contains('history')) {
+        const s = d.createObjectStore('history', { keyPath:'id', autoIncrement:true });
+        s.createIndex('jigId','jigId',{unique:false});
+      }
+      if (!d.objectStoreNames.contains('inspections')) {
+        const s = d.createObjectStore('inspections', { keyPath:'id', autoIncrement:true });
+        s.createIndex('jigId','jigId',{unique:false});
+      }
+      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings',{keyPath:'key'});
+      if (!d.objectStoreNames.contains('users')) {
+        const s = d.createObjectStore('users',{keyPath:'id',autoIncrement:true});
+        s.createIndex('email','email',{unique:true});
+      }
+    };
+    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onerror = reject;
+  });
+}
+const tx = (store,mode='readonly') => db.transaction(store,mode).objectStore(store);
+function dbGet(store,key){ return new Promise((r,j)=>{ const q=tx(store).get(key); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
+function dbGetAll(store,idx,query){ return new Promise((r,j)=>{ const os=tx(store); const q=idx?os.index(idx).getAll(query):os.getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=j; }); }
+function dbPut(store,data){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').put(data); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
+function dbAdd(store,data){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').add(data); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
+function dbDelete(store,key){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').delete(key); q.onsuccess=()=>r(); q.onerror=j; }); }
+async function getSetting(key,def=[]){ const r=await dbGet('settings',key); return r?r.value:def; }
+async function setSetting(key,value){ await dbPut('settings',{key,value}); }
+
+// ═══════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════
+function switchTab(t) {
+  document.getElementById('loginForm').style.display = t==='login'?'block':'none';
+  document.getElementById('registerForm').style.display = t==='register'?'block':'none';
+  document.getElementById('tabLogin').classList.toggle('active', t==='login');
+  document.getElementById('tabRegister').classList.toggle('active', t==='register');
+}
+
+async function doLogin() {
+  const email    = document.getElementById('loginEmail').value.trim().toLowerCase();
+  const pw       = document.getElementById('loginPw').value;
+  const msg      = document.getElementById('loginMsg');
+  const remember = document.getElementById('rememberMe').checked;
+
+  // Save or clear credentials based on checkbox
+  if (remember) {
+    localStorage.setItem('jigRemember', JSON.stringify({ email, pw }));
+  } else {
+    localStorage.removeItem('jigRemember');
+  }
+
+  // Admin shortcut
+  if (email === ADMIN_EMAIL.toLowerCase() && pw === ADMIN_PW) {
+    currentUser = { id:0, email:ADMIN_EMAIL, name:'관리자', role:'admin', perm:'admin' };
+    localStorage.setItem('jigUser', JSON.stringify(currentUser));
+    launchApp();
+    return;
+  }
+
+  // DB users
+  const users = await dbGetAll('users');
+  const user = users.find(u => u.email.toLowerCase() === email);
+  if (!user) { msg.innerHTML='<div class="alert alert-danger py-1 small">등록되지 않은 이메일입니다</div>'; return; }
+  if (user.pw !== pw) { msg.innerHTML='<div class="alert alert-danger py-1 small">비밀번호가 틀렸습니다</div>'; return; }
+  if (user.status === 'pending') { msg.innerHTML='<div class="alert alert-warning py-1 small">관리자 승인 대기 중입니다</div>'; return; }
+  if (user.status === 'rejected') { msg.innerHTML='<div class="alert alert-danger py-1 small">승인이 거부되었습니다</div>'; return; }
+
+  currentUser = { id:user.id, email:user.email, name:user.name, role:'user', perm:user.perm||'full', canDelete:user.canDelete||false };
+  localStorage.setItem('jigUser', JSON.stringify(currentUser));
+  launchApp();
+}
+
+async function doRegister() {
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim().toLowerCase();
+  const pw    = document.getElementById('regPw').value;
+  const msg   = document.getElementById('registerMsg');
+
+  if (!name || !email || !pw) { msg.innerHTML='<div class="alert alert-danger py-1 small">모든 항목을 입력하세요</div>'; return; }
+  if (pw.length < 6) { msg.innerHTML='<div class="alert alert-danger py-1 small">비밀번호는 6자 이상이어야 합니다</div>'; return; }
+  if (email === ADMIN_EMAIL.toLowerCase()) { msg.innerHTML='<div class="alert alert-danger py-1 small">이미 사용 중인 이메일입니다</div>'; return; }
+
+  const users = await dbGetAll('users');
+  if (users.find(u => u.email.toLowerCase() === email)) {
+    msg.innerHTML='<div class="alert alert-danger py-1 small">이미 가입된 이메일입니다</div>'; return;
+  }
+
+  await dbAdd('users', { email, pw, name, status:'pending', perm:'full', createdAt:new Date().toISOString() });
+  msg.innerHTML='<div class="alert alert-success py-1 small">가입 신청이 완료되었습니다. 관리자 승인 후 로그인 가능합니다.</div>';
+  document.getElementById('regName').value='';
+  document.getElementById('regEmail').value='';
+  document.getElementById('regPw').value='';
+}
+
+function doLogout() {
+  localStorage.removeItem('jigUser');
+  currentUser = null;
+  document.getElementById('mainApp').style.display='none';
+  document.getElementById('loginOverlay').style.display='flex';
+  document.getElementById('loginMsg').innerHTML='';
+  document.getElementById('loginEmail').value='';
+  document.getElementById('loginPw').value='';
+}
+
+function launchApp() {
+  document.getElementById('loginOverlay').style.display='none';
+  document.getElementById('mainApp').style.display='block';
+
+  document.getElementById('headerUserName').textContent = currentUser.name;
+  const pb = document.getElementById('headerPermBadge');
+  if (currentUser.perm==='admin')    pb.innerHTML='<span class="perm-badge perm-admin">관리자</span>';
+  else if (currentUser.perm==='full')     pb.innerHTML='<span class="perm-badge perm-full">전체권한</span>';
+  else if (currentUser.perm==='register') pb.innerHTML='<span class="perm-badge perm-register">등록전용</span>';
+  else pb.innerHTML='<span class="perm-badge perm-readonly">읽기전용</span>';
+
+  // Show/hide admin-only nav
+  document.getElementById('navUsers').style.display = isAdmin()?'flex':'none';
+
+  // Show/hide add buttons (등록전용 이상)
+  const canA = canAdd();
+  document.getElementById('btnAddJig').style.display  = canA?'':'none';
+  document.getElementById('btnAddJig2').style.display = canA?'':'none';
+
+  showPage('dashboard', document.querySelector('.nav-link'));
+}
+
+const isAdmin   = () => currentUser && currentUser.perm === 'admin';
+const canWrite  = () => currentUser && (currentUser.perm === 'admin' || currentUser.perm === 'full');
+const canAdd    = () => currentUser && (currentUser.perm === 'admin' || currentUser.perm === 'full' || currentUser.perm === 'register');
+const canDelete = () => currentUser && (currentUser.perm === 'admin' || currentUser.canDelete === true);
+
+// ═══════════════════════════════════════
+// PAGE ROUTING
+// ═══════════════════════════════════════
+function showPage(name, el) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(a=>a.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if (el) el.classList.add('active');
+  renderPage(name);
+}
+async function renderPage(n) {
+  if (n==='dashboard')  await renderDashboard();
+  if (n==='allList')    await renderAllList();
+  if (n==='byModel')    await renderByModel();
+  if (n==='byCustomer') await renderByCustomer();
+  if (n==='history')    await renderHistory();
+  if (n==='inspection') await renderInspection();
+  if (n==='settings')   await renderSettings();
+  if (n==='standards')  await renderStandards();
+  if (n==='bomUpload')  await renderBomUpload();
+  if (n==='users')      await renderUsers();
+}
+
+// ═══════════════════════════════════════
+// RESIZABLE COLUMNS
+// ═══════════════════════════════════════
+function makeResizable(table) {
+  if (!table) return;
+  table.querySelectorAll('thead th').forEach(th => {
+    // Remove old handles
+    th.querySelectorAll('.resize-handle').forEach(h=>h.remove());
+    const handle = document.createElement('div');
+    handle.className = 'resize-handle';
+    handle.title = '드래그하여 열 너비 조절';
+    th.appendChild(handle);
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startW = th.offsetWidth;
+      const onMove = e => { th.style.width = Math.max(40, startW + e.clientX - startX) + 'px'; };
+      const onUp   = () => { document.removeEventListener('mousemove',onMove); document.removeEventListener('mouseup',onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+}
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function statusBadge(s) {
+  if (s==='수리중') return `<span class="badge-status-repair"><i class="bi bi-wrench me-1"></i>수리중</span>`;
+  if (s==='폐기')   return `<span class="badge-status-retired"><i class="bi bi-x-circle me-1"></i>폐기</span>`;
+  return `<span class="badge-status-normal"><i class="bi bi-check-circle me-1"></i>정상</span>`;
+}
+function phaseBadge(p) {
+  if (p==='양산') return `<span class="badge-phase-mass"><i class="bi bi-play-fill me-1"></i>양산</span>`;
+  if (p==='단종') return `<span class="badge-phase-eol"><i class="bi bi-stop-fill me-1"></i>단종</span>`;
+  return `<span class="badge-phase-dev"><i class="bi bi-hammer me-1"></i>개발</span>`;
+}
+
+// ═══════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════
+async function renderDashboard() {
+  const jigs = await dbGetAll('jigs');
+  const inspections = await dbGetAll('inspections');
+  const modelPhaseMap = await getSetting('modelPhases',{});
+  const lastInsp = {};
+  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
+
+  const totalQty = jigs.reduce((s,j)=>s+(parseInt(j.qty)||0),0);
+  const models = [...new Set(jigs.flatMap(j=>j.models&&j.models.length?j.models:(j.model?[j.model]:[])))].filter(Boolean);
+  const repairing = jigs.filter(j=>j.status==='수리중').length;
+
+  document.getElementById('statsRow').innerHTML = `
+    <div class="col-md-3"><div class="stat-card"><div class="stat-value">${jigs.length}</div><div class="stat-label"><i class="bi bi-tools me-1"></i>총 지그 종류</div></div></div>
+    <div class="col-md-3"><div class="stat-card" style="border-color:#27ae60"><div class="stat-value" style="color:#27ae60">${totalQty}</div><div class="stat-label"><i class="bi bi-stack me-1"></i>총 보유수량</div></div></div>
+    <div class="col-md-3"><div class="stat-card" style="border-color:#9b59b6"><div class="stat-value" style="color:#9b59b6">${models.length}</div><div class="stat-label"><i class="bi bi-layers me-1"></i>모델 수</div></div></div>
+    <div class="col-md-3"><div class="stat-card" style="border-color:#e74c3c"><div class="stat-value" style="color:#e74c3c">${repairing}</div><div class="stat-label"><i class="bi bi-wrench me-1"></i>수리중</div></div></div>`;
+
+  document.getElementById('lastUpdated').textContent = '최종갱신: '+new Date().toLocaleString('ko-KR');
+  jigs.forEach(j=>{ jigPreviewMap[j.id]={name:j.name,model:j.model,photo:j.photos&&j.photos[0]||null,phase:j.phase,location:j.location,status:j.status,qty:j.qty}; });
+  const rows = jigs.slice(0,30).map(j=>`
+    <tr onclick="showDetail(${j.id})" style="cursor:pointer">
+      <td>${j.photos&&j.photos[0]?`<img class="thumb" src="${j.photos[0]}" onclick="openLightbox('${j.photos[0]}');event.stopPropagation()" onmouseenter="showJigPreview(event,${j.id})" onmousemove="moveJigPreview(event)" onmouseleave="hideJigPreview()">`:`<div class="no-img"><i class="bi bi-image"></i></div>`}</td>
+      <td><span class="badge-model">${j.model||'-'}</span></td>
+      <td>${phaseBadge(j.phase)}</td>
+      <td class="fw-bold">${j.name}</td>
+      <td><span class="badge-qty">${j.qty||0}</span></td>
+      <td>${j.location||'-'}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td>${j.maker||'-'}</td>
+      <td><small>${j.date||'-'}</small></td>
+      <td><small>${lastInsp[j.id]||'<span class="text-danger">미점검</span>'}</small></td>
+      <td>
+        <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
+        ${canDelete()?`<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteJig(${j.id});event.stopPropagation()" title="삭제"><i class="bi bi-trash"></i></button>`:''}
+      </td>
+    </tr>`).join('');
+  document.getElementById('dashTableBody').innerHTML = rows||'<tr><td colspan="10" class="text-center text-muted py-4">등록된 지그 없음</td></tr>';
+  makeResizable(document.getElementById('dashTable'));
+}
+
+// ═══════════════════════════════════════
+// ALL LIST
+// ═══════════════════════════════════════
+async function renderAllList() {
+  let jigs = await dbGetAll('jigs');
+  const inspections = await dbGetAll('inspections');
+  const modelPhaseMap = await getSetting('modelPhases',{});
+  const locations = await getSetting('locations',[]);
+  const lastInsp={};
+  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
+
+  // 모델 필터: jig 데이터에서 추출 (공용지그 복수 모델 포함)
+  const allJigModels = [...new Set(jigs.flatMap(j=>j.models&&j.models.length?j.models:(j.model?[j.model]:[])))].sort();
+  const mSel=document.getElementById('filterModel'), curM=mSel.value;
+  mSel.innerHTML='<option value="">전체 모델</option>'+allJigModels.map(m=>`<option value="${m}">${m}</option>`).join('');
+  mSel.value=curM;
+  const lSel=document.getElementById('filterLocation'), curL=lSel.value;
+  lSel.innerHTML='<option value="">전체 위치</option>'+locations.map(l=>`<option value="${l}">${l}</option>`).join('');
+  lSel.value=curL;
+
+  const search=document.getElementById('searchInput').value.toLowerCase();
+  const fModel=document.getElementById('filterModel').value;
+  const fPhase=document.getElementById('filterPhase').value;
+  const fLocation=document.getElementById('filterLocation').value;
+  const fStatus=document.getElementById('filterStatus').value;
+
+  if (search) jigs=jigs.filter(j=>(j.model+j.name+j.location+j.maker+j.contact).toLowerCase().includes(search));
+  if (fModel) jigs=jigs.filter(j=>j.models&&j.models.length ? j.models.includes(fModel) : j.model===fModel);
+  if (fPhase) jigs=jigs.filter(j=>(j.phase||'개발')===fPhase);
+  if (fLocation) jigs=jigs.filter(j=>j.location===fLocation);
+  if (fStatus) jigs=jigs.filter(j=>j.status===fStatus);
+
+  jigs.sort((a,b)=>(a.model||'').localeCompare(b.model||'')||a.name.localeCompare(b.name));
+
+  const w = canWrite();
+  const a = canAdd();
+  jigs.forEach(j=>{ jigPreviewMap[j.id]={name:j.name,model:j.model,photo:j.photos&&j.photos[0]||null,phase:j.phase,location:j.location,status:j.status,qty:j.qty}; });
+  const rows = jigs.map(j=>`
+    <tr>
+      <td>${j.photos&&j.photos[0]?`<img class="thumb" src="${j.photos[0]}" onclick="openLightbox('${j.photos[0]}')" onmouseenter="showJigPreview(event,${j.id})" onmousemove="moveJigPreview(event)" onmouseleave="hideJigPreview()">`:`<div class="no-img"><i class="bi bi-image"></i></div>`}</td>
+      <td><span class="badge-model">${j.model||'-'}</span></td>
+      <td>${phaseBadge(j.phase)}</td>
+      <td class="fw-bold">${j.name}</td>
+      <td><span class="badge-qty">${j.qty||0}</span></td>
+      <td>${j.location||'-'}</td>
+      <td>${statusBadge(j.status)}</td>
+      <td>${j.maker||'-'}</td>
+      <td><small>${j.contact||'-'}</small></td>
+      <td><small>${j.phone||'-'}</small></td>
+      <td><small>${j.date||'-'}</small></td>
+      <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id})"><i class="bi bi-eye"></i></button>
+        <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
+        ${w?`<button class="btn btn-sm btn-outline-secondary btn-action" onclick="editJig(${j.id})"><i class="bi bi-pencil"></i></button>`:''}
+        ${a?`<button class="btn btn-sm btn-outline-warning btn-action" onclick="showHistoryModal(${j.id})"><i class="bi bi-clock-history"></i></button>`:''}
+        ${(currentUser&&(currentUser.perm==='admin'||currentUser.canDelete))?`<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteJig(${j.id})"><i class="bi bi-trash"></i></button>`:''}
+      </td>
+    </tr>`).join('');
+  document.getElementById('allListBody').innerHTML = rows||'<tr><td colspan="13" class="text-center text-muted py-4">조건에 맞는 지그 없음</td></tr>';
+  document.getElementById('listCount').innerHTML=`<i class="bi bi-info-circle me-1"></i>총 <strong>${jigs.length}</strong>개`;
+  makeResizable(document.getElementById('allListTable'));
+}
+
+function clearFilters() {
+  ['searchInput','filterModel','filterPhase','filterLocation','filterStatus'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  renderAllList();
+}
+
+// ═══════════════════════════════════════
+// BY MODEL
+// ═══════════════════════════════════════
+async function renderByModel() {
+  const jigs = await dbGetAll('jigs');
+  const inspections = await dbGetAll('inspections');
+  const modelPhaseMap = await getSetting('modelPhases',{});
+  const lastInsp={};
+  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
+
+  const grouped={};
+  jigs.forEach(j=>{
+    const ms = j.models&&j.models.length ? j.models : [j.model||'미지정'];
+    ms.forEach(m=>{ if(!grouped[m]) grouped[m]=[]; grouped[m].push(j); });
+  });
+
+  const w = canWrite();
+  const a = canAdd();
+  let html = '';
+  if (!Object.keys(grouped).length) {
+    html='<div class="text-center text-muted py-5"><i class="bi bi-inbox" style="font-size:3rem"></i><div class="mt-2">등록된 지그 없음</div></div>';
+  } else {
+    jigs.forEach(j=>{ jigPreviewMap[j.id]={name:j.name,model:j.model,photo:j.photos&&j.photos[0]||null,phase:j.phase,location:j.location,status:j.status,qty:j.qty}; });
+    Object.entries(grouped).sort(([a],[b])=>a.localeCompare(b)).forEach(([model,items])=>{
+      const totalQty=items.reduce((s,j)=>s+(parseInt(j.qty)||0),0);
+      const tableId = 'byModelTable_'+model.replace(/[^a-z0-9]/gi,'_');
+      const rows=items.map(j=>`
+        <tr>
+          <td>${j.photos&&j.photos[0]?`<img class="thumb-sm" src="${j.photos[0]}" onclick="openLightbox('${j.photos[0]}')" onmouseenter="showJigPreview(event,${j.id})" onmousemove="moveJigPreview(event)" onmouseleave="hideJigPreview()">`:`<div class="no-img" style="width:30px;height:30px;font-size:0.7rem"><i class="bi bi-image"></i></div>`}</td>
+          <td class="fw-bold">${j.name}</td>
+          <td><span class="badge-qty">${j.qty||0}</span></td>
+          <td>${j.location||'-'}</td>
+          <td>${statusBadge(j.status)}</td>
+          <td>${j.maker||'-'}</td>
+          <td>${j.contact||'-'}</td>
+          <td>${j.phone||'-'}</td>
+          <td><small>${j.date||'-'}</small></td>
+          <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id})"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id})" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
+            ${w?`<button class="btn btn-sm btn-outline-secondary btn-action" onclick="editJig(${j.id})"><i class="bi bi-pencil"></i></button>`:''}
+            ${a?`<button class="btn btn-sm btn-outline-warning btn-action" onclick="showHistoryModal(${j.id})"><i class="bi bi-clock-history"></i></button>`:''}
+            ${canDelete()?`<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteJig(${j.id})" title="삭제"><i class="bi bi-trash"></i></button>`:''}
+          </td>
+        </tr>`).join('');
+      html+=`
+        <div class="model-group-body mb-4">
+          <div class="model-group-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-layers me-2"></i>${model}</span>
+            <span class="small opacity-75">${items.length}종 · 총 ${totalQty}개</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="${tableId}">
+              <thead style="background:#f8f9fa"><tr>
+                <th style="width:52px;position:relative">사진</th>
+                <th style="position:relative">지그명</th>
+                <th style="width:68px;position:relative">수량</th>
+                <th style="position:relative">보관위치</th>
+                <th style="width:68px;position:relative">상태</th>
+                <th style="position:relative">제조사</th>
+                <th style="position:relative">담당자</th>
+                <th style="position:relative">연락처</th>
+                <th style="width:88px;position:relative">입고일자</th>
+                <th style="width:88px;position:relative">마지막점검</th>
+                <th style="width:100px;position:relative">작업</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    });
+  }
+  document.getElementById('byModelContent').innerHTML=html;
+  document.querySelectorAll('[id^="byModelTable_"]').forEach(t=>makeResizable(t));
+}
+
+async function renderByCustomer() {
+  const jigs = await dbGetAll('jigs');
+  const inspections = await dbGetAll('inspections');
+  const lastInsp = {};
+  inspections.forEach(i=>{ if(!lastInsp[i.jigId]||i.date>lastInsp[i.jigId]) lastInsp[i.jigId]=i.date; });
+  const w=canWrite(), a=canAdd();
+  let html='';
+  if (!jigs.length) { html='<div class="text-muted text-center py-5">등록된 지그 없음</div>'; }
+  else {
+    const customers=[...new Set(jigs.map(j=>j.customer||'미지정'))].sort((a,b)=>{
+      if(a==='미지정') return 1; if(b==='미지정') return -1; return a.localeCompare(b,'ko');
+    });
+    jigs.forEach(j=>{ jigPreviewMap[j.id]={name:j.name,model:j.model,photo:j.photos&&j.photos[0]||null,phase:j.phase,location:j.location,status:j.status,qty:j.qty}; });
+    customers.forEach(customer=>{
+      const items=jigs.filter(j=>(j.customer||'미지정')===customer);
+      const totalQty=items.reduce((s,j)=>s+(parseInt(j.qty)||0),0);
+      const tableId='byCustomerTable_'+customer.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+      const rows=items.map(j=>`
+        <tr onclick="showDetail(${j.id})" style="cursor:pointer">
+          <td>${j.photos&&j.photos[0]?`<img class="thumb-sm" src="${j.photos[0]}" onclick="openLightbox('${j.photos[0]}');event.stopPropagation()" onmouseenter="showJigPreview(event,${j.id})" onmousemove="moveJigPreview(event)" onmouseleave="hideJigPreview()">`:`<div class="no-img" style="width:30px;height:30px;font-size:0.7rem"><i class="bi bi-image"></i></div>`}</td>
+          <td><span class="badge-model">${j.model||'-'}</span></td>
+          <td>${phaseBadge(j.phase)}</td>
+          <td class="fw-bold">${j.name}</td>
+          <td><span class="badge-qty">${j.qty||0}</span></td>
+          <td>${j.location||'-'}</td>
+          <td>${statusBadge(j.status)}</td>
+          <td>${j.maker||'-'}</td>
+          <td><small>${j.date||'-'}</small></td>
+          <td><small>${lastInsp[j.id]||'<span class="text-warning">미점검</span>'}</small></td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary btn-action" onclick="showDetail(${j.id});event.stopPropagation()"><i class="bi bi-eye"></i></button>
+            <button class="btn btn-sm btn-outline-info btn-action" onclick="openInspectionForJig(${j.id});event.stopPropagation()" title="점검시트"><i class="bi bi-clipboard2-check"></i></button>
+            ${w?`<button class="btn btn-sm btn-outline-secondary btn-action" onclick="editJig(${j.id});event.stopPropagation()"><i class="bi bi-pencil"></i></button>`:''}
+            ${canDelete()?`<button class="btn btn-sm btn-outline-danger btn-action" onclick="deleteJig(${j.id});event.stopPropagation()" title="삭제"><i class="bi bi-trash"></i></button>`:''}
+          </td>
+        </tr>`).join('');
+      html+=`
+        <div class="model-group-body mb-4">
+          <div class="model-group-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-building me-2"></i>${customer}</span>
+            <span class="small opacity-75">${items.length}종 · 총 ${totalQty}개</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="${tableId}">
+              <thead style="background:#f8f9fa"><tr>
+                <th style="width:52px;position:relative">사진</th>
+                <th style="width:110px;position:relative">모델명</th>
+                <th style="width:68px;position:relative">단계</th>
+                <th style="position:relative">지그명</th>
+                <th style="width:60px;position:relative">수량</th>
+                <th style="position:relative">보관위치</th>
+                <th style="width:68px;position:relative">상태</th>
+                <th style="position:relative">제조사</th>
+                <th style="width:88px;position:relative">입고일자</th>
+                <th style="width:88px;position:relative">마지막점검</th>
+                <th style="width:100px;position:relative">작업</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    });
+  }
+  document.getElementById('byCustomerContent').innerHTML=html;
+  document.querySelectorAll('[id^="byCustomerTable_"]').forEach(t=>makeResizable(t));
+}
+
+// ═══════════════════════════════════════
+// HISTORY
+// ═══════════════════════════════════════
+async function renderHistory() {
+  const jigs = await dbGetAll('jigs');
+  const histories = await dbGetAll('history');
+  const jigSel=document.getElementById('histFilterJig'), curV=jigSel.value;
+  jigSel.innerHTML='<option value="">전체 지그</option>'+jigs.map(j=>`<option value="${j.id}">${j.model} - ${j.name}</option>`).join('');
+  jigSel.value=curV;
+  const jigMap={}; jigs.forEach(j=>jigMap[j.id]=j);
+
+  let filtered=[...histories];
+  const fJig=document.getElementById('histFilterJig').value;
+  const fType=document.getElementById('histFilterType').value;
+  const fFrom=document.getElementById('histFromDate').value;
+  const fTo=document.getElementById('histToDate').value;
+  if(fJig) filtered=filtered.filter(h=>h.jigId==fJig);
+  if(fType) filtered=filtered.filter(h=>h.type===fType);
+  if(fFrom) filtered=filtered.filter(h=>h.date>=fFrom);
+  if(fTo) filtered=filtered.filter(h=>h.date<=fTo);
+  filtered.sort((a,b)=>(b.date+b.id)>(a.date+a.id)?1:-1);
+
+  const typeClass={'위치이동':'move','수리':'repair','점검':'inspect'};
+  const byDate={};
+  filtered.forEach(h=>{ const d=h.date||'날짜미상'; if(!byDate[d]) byDate[d]=[]; byDate[d].push(h); });
+
+  let html='';
+  if(!filtered.length) html='<div class="text-center text-muted py-4">이력 없음</div>';
+  else {
+    Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).forEach(([date,items])=>{
+      html+=`<div class="mb-1 text-muted small fw-bold ps-1"><i class="bi bi-calendar3 me-1"></i>${date}</div>`;
+      items.forEach(h=>{
+        const jig=jigMap[h.jigId];
+        const jigName=jig?`${jig.model} - ${jig.name}`:'삭제된 지그';
+        html+=`<div class="history-item history-${typeClass[h.type]||''} mb-2">
+          <div class="d-flex justify-content-between align-items-start">
+            <div><span class="h-type">[${h.type}]</span> <span class="fw-bold ms-1">${jigName}</span></div>
+            <div class="d-flex gap-1 align-items-center">
+              ${h.worker?`<small class="text-muted"><i class="bi bi-person me-1"></i>${h.worker}</small>`:''}
+              ${(currentUser&&(currentUser.perm==='admin'||currentUser.canDelete))?`<button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="deleteHistory(${h.id})"><i class="bi bi-trash"></i></button>`:''}
+            </div>
+          </div>
+          ${h.content?`<div class="mt-1 text-secondary small">${h.content}</div>`:''}
+          ${h.newLocation?`<div class="mt-1 small"><i class="bi bi-arrow-right text-warning me-1"></i>${h.newLocation}</div>`:''}
+          ${h.newQty!==undefined&&h.newQty!==''?`<div class="mt-1 small"><i class="bi bi-arrow-right text-info me-1"></i>${h.newQty}개</div>`:''}
+        </div>`;
+      });
+    });
+  }
+  document.getElementById('historyContent').innerHTML=`<div class="mb-2 text-muted small">총 <strong>${filtered.length}</strong>건</div>`+html;
+}
+
+async function deleteHistory(id) {
+  if(!canDelete()) { alert('삭제 권한이 없습니다'); return; }
+  if(!confirm('이 이력을 삭제하시겠습니까?')) return;
+  await dbDelete('history',id); renderHistory();
+}
+
+// ═══════════════════════════════════════
+// INSPECTION
+// ═══════════════════════════════════════
+let inspState = { jigId:null, date:'', mgmtNo:'', signs:['','',''], images:[null,null,null], sections:[], finalJudgment:{조립:'',품질:'',개발:''} };
+
+function _iEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+
+function _defaultSections() {
+  return [
+    { title:'1.일반점검사항', groups:[
+      { facility:'Jig 안착성 확인', items:[{product:'',judgment:'',note:''},{product:'',judgment:'',note:''}] },
+      { facility:'Jig 동작 확인',  items:[{product:'',judgment:'',note:''},{product:'',judgment:'',note:''}] },
+      { facility:'각인상태 확인',  items:[{product:'',judgment:'',note:''}] }
+    ]},
+    { title:'2.세부점검사항', groups:[
+      { facility:'평탄도 확인', items:[{product:'',judgment:'',note:''}] },
+      { facility:'마킹 확인',  items:[{product:'',judgment:'',note:''}] }
+    ]}
+  ];
+}
+
+async function openInspectionForJig(jigId) {
+  // 열려있는 모달 닫기
+  document.querySelectorAll('.modal.show').forEach(m => { try { bootstrap.Modal.getInstance(m)?.hide(); } catch(e){} });
+  // 점검시트 페이지로 이동 (DOM 전환만 동기 처리)
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(a=>a.classList.remove('active'));
+  document.getElementById('page-inspection').classList.add('active');
+  const navEl = document.querySelector('.nav-link[onclick*="\'inspection\'"]');
+  if (navEl) navEl.classList.add('active');
+  // 지그 목록 렌더링 완료 후 select 세팅
+  await renderInspection();
+  const sel = document.getElementById('inspJigSelect');
+  if (sel) { sel.value = jigId; await onInspJigChange(); }
+}
+
+async function onInspJigChange() {
+  const jigId = parseInt(document.getElementById('inspJigSelect').value);
+  if (!jigId) { newInspectionSheet(); return; }
+  // 해당 지그의 가장 최근 점검 기록에서 sections 템플릿 불러오기
+  const all = await dbGetAll('inspections');
+  const forJig = all.filter(i => i.jigId === jigId && i.sections && i.sections.length);
+  forJig.sort((a,b) => b.createdAt > a.createdAt ? 1 : -1);
+  const latest = forJig[0];
+  if (latest) {
+    // 이전 점검의 항목 구조만 복사, 판정은 초기화
+    const sections = JSON.parse(JSON.stringify(latest.sections));
+    sections.forEach(s => s.groups.forEach(g => g.items.forEach(it => { it.judgment=''; it.note=''; })));
+    inspState = {
+      jigId,
+      date: new Date().toISOString().split('T')[0],
+      mgmtNo: latest.mgmtNo||'',
+      signs: latest.signs||['','',''],
+      images: [null,null,null],
+      sections,
+      finalJudgment: {조립:'',품질:'',개발:''}
+    };
+  } else {
+    inspState = {
+      jigId,
+      date: new Date().toISOString().split('T')[0],
+      mgmtNo:'', signs:['','',''], images:[null,null,null],
+      sections: _defaultSections(),
+      finalJudgment: {조립:'',품질:'',개발:''}
+    };
+  }
+  _applyInspStateToForm();
+  renderInspSheet();
+  renderFinalJudgment();
+}
+
+function newInspectionSheet() {
+  inspState = { jigId:null, date:new Date().toISOString().split('T')[0], mgmtNo:'', signs:['','',''], images:[null,null,null], sections:_defaultSections(), finalJudgment:{조립:'',품질:'',개발:''} };
+  _applyInspStateToForm();
+  renderInspSheet();
+  renderFinalJudgment();
+}
+
+function _applyInspStateToForm() {
+  const s = inspState;
+  const jigSel = document.getElementById('inspJigSelect');
+  if (jigSel) jigSel.value = s.jigId||'';
+  const dateEl = document.getElementById('inspDate'); if(dateEl) dateEl.value = s.date||'';
+  const mgmtEl = document.getElementById('inspMgmtNo'); if(mgmtEl) mgmtEl.value = s.mgmtNo||'';
+  ['inspSign1','inspSign2','inspSign3'].forEach((id,i)=>{ const el=document.getElementById(id); if(el) el.value=s.signs[i]||''; });
+  [1,2,3].forEach(n => {
+    const box = document.getElementById('inspImgBox'+n);
+    const del = document.getElementById('inspImgDel'+n);
+    if (!box) return;
+    const img = s.images[n-1];
+    if (img) { box.innerHTML=`<img src="${img}" alt="">`; if(del) del.style.display=''; }
+    else { box.innerHTML=`<i class="bi bi-camera fs-4 text-muted"></i><div class="small text-muted">사진 추가</div>`; if(del) del.style.display='none'; }
+  });
+}
+
+async function renderInspection() {
+  const jigs = await dbGetAll('jigs');
+  const sel = document.getElementById('inspJigSelect');
+  sel.innerHTML = '<option value="">-- 지그 선택 --</option>' + jigs.map(j=>`<option value="${j.id}">${j.model} - ${j.name}</option>`).join('');
+  if (!inspState.sections.length) newInspectionSheet();
+  else _applyInspStateToForm();
+  renderInspSheet();
+  renderFinalJudgment();
+  await renderInspHistory();
+}
+
+function renderInspSheet() {
+  const wrap = document.getElementById('inspSectionsWrapper');
+  if (!wrap) return;
+  let html = `<table class="table table-bordered table-sm mb-0 insp-table" style="font-size:0.84rem">
+    <colgroup><col style="width:155px"><col><col style="width:58px"><col style="width:58px"><col style="width:140px"><col style="width:40px"></colgroup>
+    <thead>
+      <tr><th rowspan="2">설비(공정) 점검 항목</th><th rowspan="2">제품 검사 항목</th><th colspan="2">판정</th><th rowspan="2">비고</th><th rowspan="2"></th></tr>
+      <tr><th>OK</th><th>NG</th></tr>
+    </thead><tbody>`;
+
+  inspState.sections.forEach((sec, si) => {
+    html += `<tr class="insp-sec-hdr">
+      <td colspan="5" style="background:#f0f0f0">
+        <input type="text" class="form-control form-control-sm d-inline-block fw-bold border-0 bg-transparent" style="width:210px" value="${_iEsc(sec.title)}" oninput="inspState.sections[${si}].title=this.value">
+        <button class="btn btn-sm btn-outline-primary ms-2" style="padding:1px 8px;font-size:0.72rem" onclick="addInspGroup(${si})"><i class="bi bi-plus"></i> 항목추가</button>
+      </td>
+      <td style="background:#f0f0f0;text-align:center">
+        <button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="removeInspSection(${si})"><i class="bi bi-trash"></i></button>
+      </td>
+    </tr>`;
+
+    if (!sec.groups.length) {
+      html += `<tr><td colspan="6" class="text-muted text-center py-2" style="font-size:0.8rem">항목을 추가하세요</td></tr>`;
+    }
+
+    sec.groups.forEach((grp, gi) => {
+      const rc = grp.items.length;
+      if (rc === 0) {
+        html += `<tr>
+          <td>
+            <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
+            <div class="d-flex gap-1 mt-1">
+              <button class="btn btn-sm btn-outline-primary" style="padding:0 5px;font-size:0.68rem" onclick="addInspItem(${si},${gi})"><i class="bi bi-plus"></i></button>
+              <button class="btn btn-sm btn-outline-danger"  style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i></button>
+            </div>
+          </td>
+          <td colspan="5" class="text-muted text-center" style="font-size:0.8rem">검사 항목을 추가하세요</td>
+        </tr>`;
+        return;
+      }
+      grp.items.forEach((item, ii) => {
+        const jv = item.judgment;
+        html += '<tr>';
+        if (ii === 0) {
+          html += `<td rowspan="${rc + 1}" style="vertical-align:middle">
+            <input type="text" class="form-control form-control-sm border-0 fw-semibold" style="padding:2px" value="${_iEsc(grp.facility)}" placeholder="점검항목명" oninput="inspState.sections[${si}].groups[${gi}].facility=this.value">
+            <div class="mt-1">
+              <button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspGroup(${si},${gi})"><i class="bi bi-x-lg"></i> 삭제</button>
+            </div>
+          </td>`;
+        }
+        html += `
+          <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.product)}" placeholder="검사 항목 내용" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].product=this.value"></td>
+          <td class="text-center p-1"><button id="ok_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='OK'?'btn-ok':'btn-outline-success'}" style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'OK')">OK</button></td>
+          <td class="text-center p-1"><button id="ng_${si}_${gi}_${ii}" class="btn btn-sm ${jv==='NG'?'btn-ng':'btn-outline-danger'}"  style="min-width:40px;padding:2px 0;font-size:0.78rem" onclick="setItemJudgment(${si},${gi},${ii},'NG')">NG</button></td>
+          <td><input type="text" class="form-control form-control-sm border-0" style="padding:2px" value="${_iEsc(item.note)}" placeholder="비고" oninput="inspState.sections[${si}].groups[${gi}].items[${ii}].note=this.value"></td>
+          <td class="text-center p-1"><button class="btn btn-sm btn-outline-danger" style="padding:0 5px;font-size:0.68rem" onclick="removeInspItem(${si},${gi},${ii})"><i class="bi bi-dash-lg"></i></button></td>
+        </tr>`;
+      });
+      // 제품 검사 항목 추가 버튼 행
+      html += `<tr style="background:#f8fbff">
+        <td colspan="4" class="p-1 ps-2">
+          <button class="btn btn-sm btn-outline-primary" style="font-size:0.76rem;padding:2px 10px" onclick="addInspItem(${si},${gi})">
+            <i class="bi bi-plus-circle me-1"></i>제품 검사 항목 추가
+          </button>
+        </td>
+        <td></td>
+      </tr>`;
+    });
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function setItemJudgment(si, gi, ii, val) {
+  const cur = inspState.sections[si].groups[gi].items[ii].judgment;
+  const newVal = cur === val ? '' : val;
+  inspState.sections[si].groups[gi].items[ii].judgment = newVal;
+  const okBtn = document.getElementById(`ok_${si}_${gi}_${ii}`);
+  const ngBtn = document.getElementById(`ng_${si}_${gi}_${ii}`);
+  if (okBtn) okBtn.className = `btn btn-sm ${newVal==='OK'?'btn-ok':'btn-outline-success'}`;
+  if (ngBtn) ngBtn.className = `btn btn-sm ${newVal==='NG'?'btn-ng':'btn-outline-danger'}`;
+}
+
+function setFinalJudgment(dept, val) {
+  const cur = inspState.finalJudgment[dept];
+  inspState.finalJudgment[dept] = cur === val ? '' : val;
+  renderFinalJudgment();
+}
+
+function renderFinalJudgment() {
+  ['조립','품질','개발'].forEach(dept => {
+    const v = inspState.finalJudgment[dept];
+    const ok = document.getElementById('finalOk_'+dept);
+    const ng = document.getElementById('finalNg_'+dept);
+    if (ok) ok.className = `btn btn-sm ${v==='OK'?'btn-ok':'btn-outline-success'}`;
+    if (ng) ng.className = `btn btn-sm ${v==='NG'?'btn-ng':'btn-outline-danger'}`;
+  });
+}
+
+function addInspSection() {
+  inspState.sections.push({ title:`${inspState.sections.length+1}.새 섹션`, groups:[] });
+  renderInspSheet();
+}
+function removeInspSection(si) {
+  inspState.sections.splice(si, 1);
+  renderInspSheet();
+}
+function addInspGroup(si) {
+  inspState.sections[si].groups.push({ facility:'', items:[{product:'',judgment:'',note:''}] });
+  renderInspSheet();
+}
+function removeInspGroup(si, gi) {
+  inspState.sections[si].groups.splice(gi, 1);
+  renderInspSheet();
+}
+function addInspItem(si, gi) {
+  inspState.sections[si].groups[gi].items.push({product:'',judgment:'',note:''});
+  renderInspSheet();
+}
+function removeInspItem(si, gi, ii) {
+  inspState.sections[si].groups[gi].items.splice(ii, 1);
+  renderInspSheet();
+}
+
+function loadInspImg(n, input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { setInspImgData(n, e.target.result); input.value = ''; };
+  reader.readAsDataURL(file);
+}
+let lastFocusedInspImg = 1;
+
+function focusInspImg(n) {
+  lastFocusedInspImg = n;
+  [1,2,3].forEach(i => {
+    const b = document.getElementById('inspImgBox'+i);
+    if (b) b.classList.toggle('insp-img-selected', i===n);
+  });
+}
+
+function setInspImgData(n, dataUrl) {
+  inspState.images[n-1] = dataUrl;
+  const box = document.getElementById('inspImgBox'+n);
+  const del = document.getElementById('inspImgDel'+n);
+  if (box) box.innerHTML = `<img src="${dataUrl}" alt="">`;
+  if (del) del.style.display = '';
+}
+
+// 점검시트 사진 Ctrl+V 붙여넣기
+document.addEventListener('paste', function(e) {
+  const inspPage = document.getElementById('page-inspection');
+  if (!inspPage || !inspPage.classList.contains('active')) return;
+  // 지그 등록 모달이 열려있으면 무시
+  const jigModal = document.getElementById('jigModal');
+  if (jigModal && jigModal.classList.contains('show')) return;
+  const items = Array.from(e.clipboardData.items||[]);
+  const imgItem = items.find(it=>it.type.startsWith('image/'));
+  if (!imgItem) return;
+  e.preventDefault();
+  // 포커스된 슬롯 또는 첫 번째 빈 슬롯
+  let slot = lastFocusedInspImg;
+  const el = document.activeElement;
+  if (el && el.id && el.id.startsWith('inspImgBox')) slot = parseInt(el.id.replace('inspImgBox',''));
+  if (!slot || slot<1 || slot>3) {
+    slot = [1,2,3].find(i=>!inspState.images[i-1]) || 1;
+  }
+  const file = imgItem.getAsFile();
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => { setInspImgData(slot, ev.target.result); focusInspImg(slot); };
+  reader.readAsDataURL(file);
+});
+
+function clearInspImg(n) {
+  inspState.images[n-1] = null;
+  const box = document.getElementById('inspImgBox'+n);
+  const del = document.getElementById('inspImgDel'+n);
+  if (box) box.innerHTML = `<i class="bi bi-camera fs-4 text-muted"></i><div class="small text-muted">클릭 또는 Ctrl+V</div>`;
+  if (del) del.style.display = 'none';
+}
+
+async function saveInspectionSheet() {
+  if (!canAdd()) { alert('등록 권한이 없습니다'); return; }
+  const jigId = parseInt(document.getElementById('inspJigSelect').value);
+  if (!jigId) { alert('대상 지그를 선택하세요'); return; }
+  const date = document.getElementById('inspDate').value;
+  if (!date) { alert('점검일자를 입력하세요'); return; }
+  inspState.jigId  = jigId;
+  inspState.date   = date;
+  inspState.mgmtNo = document.getElementById('inspMgmtNo').value;
+  inspState.signs  = ['inspSign1','inspSign2','inspSign3'].map(id=>document.getElementById(id).value);
+  const fj = inspState.finalJudgment;
+  const result = (fj.조립==='OK'&&fj.품질==='OK'&&fj.개발==='OK') ? 'OK' : (Object.values(fj).includes('NG') ? 'NG' : '미판정');
+  const insp = { ...inspState, result, createdAt: new Date().toISOString() };
+  await dbAdd('inspections', insp);
+  await dbAdd('history', {jigId, date, type:'점검', content:`점검결과: ${result} (조립:${fj.조립||'-'} / 품질:${fj.품질||'-'} / 개발:${fj.개발||'-'})`, createdAt:new Date().toISOString()});
+  const jig = await dbGet('jigs', jigId);
+  if (jig) { jig.lastInspection = date; await dbPut('jigs', jig); }
+  alert('점검 시트가 저장되었습니다.');
+  newInspectionSheet();
+  await renderInspHistory();
+}
+
+async function renderInspHistory() {
+  const jigs = await dbGetAll('jigs');
+  const jigMap = {}; jigs.forEach(j => jigMap[j.id] = j);
+  const inspections = await dbGetAll('inspections');
+  inspections.sort((a,b) => b.createdAt > a.createdAt ? 1 : -1);
+  const el = document.getElementById('inspectionList');
+  if (!el) return;
+  if (!inspections.length) { el.innerHTML = '<div class="text-muted text-center py-4">점검 기록 없음</div>'; return; }
+  el.innerHTML = inspections.map(i => {
+    const jig = jigMap[i.jigId];
+    const jigName = jig ? `${jig.model} - ${jig.name}` : '삭제된 지그';
+    const rc = i.result || '미판정';
+    const rcCls = rc==='OK'?'success': rc==='NG'?'danger':'secondary';
+    const fj = i.finalJudgment||{};
+    const fjHtml = Object.entries(fj).filter(([,v])=>v).map(([k,v])=>`<span class="badge ${v==='OK'?'bg-success':'bg-danger'} me-1">${k}: ${v}</span>`).join('');
+    return `<div class="insp-history-item" onclick="loadInspRecord(${i.id})">
+      <div class="d-flex justify-content-between align-items-start">
+        <div>
+          <span class="badge bg-${rcCls} me-2">${rc}</span>
+          <strong>${jigName}</strong>
+          ${i.mgmtNo?`<span class="text-muted ms-2 small">${i.mgmtNo}</span>`:''}
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <small class="text-muted">${i.date}</small>
+          ${(currentUser&&(currentUser.perm==='admin'||currentUser.canDelete))?`<button class="btn btn-sm btn-outline-danger" style="padding:1px 5px;font-size:0.7rem" onclick="event.stopPropagation();deleteInspection(${i.id})"><i class="bi bi-trash"></i></button>`:''}
+        </div>
+      </div>
+      ${fjHtml?`<div class="mt-1">${fjHtml}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function loadInspRecord(id) {
+  const insp = await dbGet('inspections', id); if (!insp) return;
+  inspState = { ...insp };
+  if (!inspState.images) inspState.images = [null,null,null];
+  if (!inspState.finalJudgment) inspState.finalJudgment = {조립:'',품질:'',개발:''};
+  if (!inspState.sections) inspState.sections = [];
+  const jigSel = document.getElementById('inspJigSelect');
+  if (jigSel) jigSel.value = insp.jigId||'';
+  _applyInspStateToForm();
+  renderInspSheet();
+  renderFinalJudgment();
+}
+
+async function deleteInspection(id) {
+  if (!canDelete()) { alert('삭제 권한이 없습니다'); return; }
+  if (!confirm('삭제하시겠습니까?')) return;
+  await dbDelete('inspections', id);
+  await renderInspHistory();
+}
+
+// ═══════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════
+async function renderSettings() {
+  const models=await getSetting('models',[]);
+  const locations=await getSetting('locations',[]);
+  const modelPhaseMap=await getSetting('modelPhases',{});
+
+  document.getElementById('modelList').innerHTML=models.map((m,i)=>`
+    <div class="d-flex align-items-center gap-2 mb-2">
+      <span class="badge-model p-2" style="min-width:90px">${m}</span>
+      <select class="form-select form-select-sm" style="max-width:95px" onchange="setModelPhase('${m}',this.value)">
+        <option value="개발" ${(modelPhaseMap[m]||'개발')==='개발'?'selected':''}>개발</option>
+        <option value="양산" ${modelPhaseMap[m]==='양산'?'selected':''}>양산</option>
+        <option value="단종" ${modelPhaseMap[m]==='단종'?'selected':''}>단종</option>
+      </select>
+      ${phaseBadge(modelPhaseMap[m]||'개발')}
+      <button class="btn btn-sm btn-outline-danger ms-auto" onclick="removeModel(${i})"><i class="bi bi-x"></i></button>
+    </div>`).join('')||'<div class="text-muted small">등록된 모델 없음</div>';
+
+  document.getElementById('locationList').innerHTML=locations.map((l,i)=>`
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-secondary flex-grow-1 p-2 text-start">${l}</span>
+      <button class="btn btn-sm btn-outline-danger" onclick="removeLocation(${i})"><i class="bi bi-x"></i></button>
+    </div>`).join('')||'<div class="text-muted small">등록된 위치 없음</div>';
+
+  // Show/hide clear data for admin only
+  if(document.getElementById('btnClearData')) document.getElementById('btnClearData').style.display=isAdmin()?'':'none';
+}
+
+// ═══════════════════════════════════════
+// STANDARDS (관리기준)
+// ═══════════════════════════════════════
+async function renderStandards() {
+  const s = await getSetting('standards', {});
+  const setVal = (id, val, def='') => { const el=document.getElementById(id); if(el) el.value = val !== undefined ? val : def; };
+  setVal('std-inspect-cycle',  s.inspectCycle,  '7');
+  setVal('std-inspect-unit',   s.inspectUnit,   '일');
+  setVal('std-precise-cycle',  s.preciseCycle,  '1');
+  setVal('std-precise-unit',   s.preciseUnit,   '월');
+  setVal('std-replace-cycle',  s.replaceCycle,  '6');
+  setVal('std-replace-unit',   s.replaceUnit,   '월');
+  setVal('std-max-use',        s.maxUse,        '');
+  setVal('std-max-months',     s.maxMonths,     '');
+  setVal('std-defect-rate',    s.defectRate,    '');
+  setVal('std-grade-normal',   s.gradeNormal,   '이상 없음, 정상 작동');
+  setVal('std-grade-caution',  s.gradeCaution,  '경미한 마모, 점검 필요');
+  setVal('std-grade-bad',      s.gradeBad,      '사용 불가, 즉시 교체');
+  setVal('std-notes',          s.notes,         '');
+}
+async function saveStandards() {
+  const getVal = id => { const el=document.getElementById(id); return el ? el.value : ''; };
+  const s = {
+    inspectCycle:  getVal('std-inspect-cycle'),
+    inspectUnit:   getVal('std-inspect-unit'),
+    preciseCycle:  getVal('std-precise-cycle'),
+    preciseUnit:   getVal('std-precise-unit'),
+    replaceCycle:  getVal('std-replace-cycle'),
+    replaceUnit:   getVal('std-replace-unit'),
+    maxUse:        getVal('std-max-use'),
+    maxMonths:     getVal('std-max-months'),
+    defectRate:    getVal('std-defect-rate'),
+    gradeNormal:   getVal('std-grade-normal'),
+    gradeCaution:  getVal('std-grade-caution'),
+    gradeBad:      getVal('std-grade-bad'),
+    notes:         getVal('std-notes'),
+  };
+  await setSetting('standards', s);
+  alert('관리기준이 저장되었습니다.');
+}
+
+async function addModel() {
+  const v=document.getElementById('newModelInput').value.trim(); if(!v) return;
+  const models=await getSetting('models',[]);
+  if(!models.includes(v)){ models.push(v); await setSetting('models',models);
+    const phases=await getSetting('modelPhases',{}); if(!phases[v]){ phases[v]='개발'; await setSetting('modelPhases',phases); } }
+  document.getElementById('newModelInput').value=''; renderSettings();
+}
+async function removeModel(i) {
+  const models=await getSetting('models',[]); const removed=models[i]; models.splice(i,1); await setSetting('models',models);
+  if(removed){ const p=await getSetting('modelPhases',{}); delete p[removed]; await setSetting('modelPhases',p); }
+  renderSettings();
+}
+async function setModelPhase(name,phase) {
+  const p=await getSetting('modelPhases',{}); p[name]=phase; await setSetting('modelPhases',p); renderSettings();
+}
+async function addLocation() {
+  const v=document.getElementById('newLocationInput').value.trim(); if(!v) return;
+  const locs=await getSetting('locations',[]); if(!locs.includes(v)){ locs.push(v); await setSetting('locations',locs); }
+  document.getElementById('newLocationInput').value=''; renderSettings();
+}
+async function removeLocation(i) {
+  const locs=await getSetting('locations',[]); locs.splice(i,1); await setSetting('locations',locs); renderSettings();
+}
+
+// ═══════════════════════════════════════
+// USER MANAGEMENT (admin)
+// ═══════════════════════════════════════
+async function renderUsers() {
+  if(!isAdmin()) { document.getElementById('page-users').innerHTML='<div class="alert alert-danger">관리자 전용 페이지입니다</div>'; return; }
+  const users=await dbGetAll('users');
+  const pending=users.filter(u=>u.status==='pending');
+  const approved=users.filter(u=>u.status==='approved');
+  document.getElementById('pendingCount').textContent=pending.length;
+
+  const PERMS = [
+    { val:'full',     label:'전체권한', desc:'등록·수정·삭제 모두 가능', cls:'perm-full' },
+    { val:'register', label:'등록전용', desc:'등록·이력추가만 가능, 수정·삭제 불가', cls:'perm-register' },
+    { val:'readonly', label:'읽기전용', desc:'조회만 가능, 변경 불가', cls:'perm-readonly' },
+  ];
+  const permBadge = (p) => { const f=PERMS.find(x=>x.val===p)||PERMS[2]; return `<span class="perm-badge ${f.cls}" style="font-size:0.72rem;padding:2px 8px;border-radius:20px;font-weight:700;">${f.label}</span>`; };
+  const permOpts  = (u) => PERMS.map(p=>`<option value="${p.val}" ${(u.perm||'readonly')===p.val?'selected':''}>${p.label} — ${p.desc}</option>`).join('');
+
+  document.getElementById('pendingUsers').innerHTML=pending.map(u=>`
+    <div class="user-row flex-wrap gap-2">
+      <div style="flex:1;min-width:160px">
+        <div class="user-email">${u.email}</div>
+        <div class="user-name">${u.name} · ${u.createdAt?u.createdAt.split('T')[0]:'-'}</div>
+      </div>
+      <select class="form-select form-select-sm" id="approvePerm_${u.id}" style="max-width:160px">
+        ${PERMS.map(p=>`<option value="${p.val}">${p.label} — ${p.desc}</option>`).join('')}
+      </select>
+      <span class="status-pending">대기중</span>
+      <button class="btn btn-sm btn-success" onclick="approveUser(${u.id})"><i class="bi bi-check-lg me-1"></i>승인</button>
+      <button class="btn btn-sm btn-danger" onclick="rejectUser(${u.id})"><i class="bi bi-x-lg"></i></button>
+    </div>`).join('')||'<div class="text-muted small text-center py-3">대기 중인 사용자 없음</div>';
+
+  document.getElementById('approvedUsers').innerHTML=approved.map(u=>`
+    <div class="user-row flex-wrap gap-2">
+      <div style="flex:1;min-width:160px">
+        <div class="user-email">${u.email}</div>
+        <div class="user-name">${u.name}</div>
+      </div>
+      ${permBadge(u.perm)}
+      <select class="form-select form-select-sm" style="max-width:200px" onchange="setUserPerm(${u.id},this.value)">${permOpts(u)}</select>
+      <label class="d-flex align-items-center gap-1 mb-0 small" style="cursor:pointer;white-space:nowrap" title="삭제 권한">
+        <input type="checkbox" ${u.canDelete?'checked':''} onchange="setUserDeletePerm(${u.id},this.checked)">
+        <span class="text-danger fw-bold">삭제권한</span>
+      </label>
+      <span class="status-approved">승인됨</span>
+      <button class="btn btn-sm btn-outline-danger" onclick="revokeUser(${u.id})"><i class="bi bi-person-x"></i></button>
+    </div>`).join('')||'<div class="text-muted small text-center py-3">승인된 사용자 없음</div>';
+}
+
+async function approveUser(id) {
+  const u=await dbGet('users',id); if(!u) return;
+  const sel=document.getElementById('approvePerm_'+id);
+  u.status='approved'; u.perm=sel?sel.value:'readonly'; await dbPut('users',u); renderUsers();
+}
+async function rejectUser(id) {
+  if(!confirm('이 사용자를 거부하시겠습니까?')) return;
+  const u=await dbGet('users',id); if(!u) return;
+  u.status='rejected'; await dbPut('users',u); renderUsers();
+}
+async function revokeUser(id) {
+  if(!confirm('이 사용자의 승인을 취소하시겠습니까?')) return;
+  const u=await dbGet('users',id); if(!u) return;
+  u.status='pending'; await dbPut('users',u); renderUsers();
+}
+async function setUserPerm(id,perm) {
+  const u=await dbGet('users',id); if(!u) return;
+  u.perm=perm; await dbPut('users',u);
+  renderUsers();
+}
+async function setUserDeletePerm(id, val) {
+  const u=await dbGet('users',id); if(!u) return;
+  u.canDelete = val; await dbPut('users',u);
+}
+
+// ═══════════════════════════════════════
+// JIG MODAL
+// ═══════════════════════════════════════
+async function showAddModal() {
+  if(!canAdd()) { alert('등록 권한이 없습니다'); return; }
+  document.getElementById('modalTitle').innerHTML='<i class="bi bi-plus-circle me-2"></i>지그 등록';
+  document.getElementById('editId').value='';
+  ['fName','fCustomer','fMaker','fContact','fPhone','fNote'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fQty').value=1;
+  document.getElementById('fDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('fPhase').value='개발';
+  document.getElementById('fStatus').value='정상';
+  // btnJigInspSheet: 신규 등록 시에도 표시 (저장 후 점검시트로 이동)
+  currentPhotos=[]; renderPhotoGrid();
+  currentModels=[]; document.getElementById('fIsShared').checked=false; renderModelTags();
+  await populateSelects();
+  new bootstrap.Modal(document.getElementById('jigModal')).show();
+}
+
+async function editJig(id) {
+  if(!canWrite()) { alert('편집 권한이 없습니다'); return; }
+  const j=await dbGet('jigs',id); if(!j) return;
+  document.getElementById('modalTitle').innerHTML='<i class="bi bi-pencil me-2"></i>지그 수정';
+  document.getElementById('editId').value=id;
+  currentModels = j.models && j.models.length ? [...j.models] : (j.model ? [j.model] : []);
+  document.getElementById('fIsShared').checked = currentModels.length > 1;
+  await populateSelects(j.location);
+  renderModelTags();
+  document.getElementById('fName').value=j.name||'';
+  document.getElementById('fQty').value=j.qty||1;
+  document.getElementById('fDate').value=j.date||'';
+  document.getElementById('fPhase').value=j.phase||'개발';
+  document.getElementById('fStatus').value=j.status||'정상';
+  document.getElementById('btnJigInspSheet').style.display='';
+  document.getElementById('fMaker').value=j.maker||'';
+  document.getElementById('fContact').value=j.contact||'';
+  document.getElementById('fPhone').value=j.phone||'';
+  document.getElementById('fCustomer').value=j.customer||'';
+  document.getElementById('fNote').value=j.note||'';
+  currentPhotos=j.photos||[]; renderPhotoGrid();
+  new bootstrap.Modal(document.getElementById('jigModal')).show();
+}
+
+async function populateSelects(selLocation) {
+  const locations=await getSetting('locations',[]);
+  document.getElementById('fLocation').innerHTML='<option value="">-- 위치 선택 --</option>'+locations.map(l=>`<option value="${l}" ${l===selLocation?'selected':''}>${l}</option>`).join('');
+  document.getElementById('fModelDropdown').classList.remove('show');
+}
+
+async function saveJigThenInspect() {
+  const savedId = await saveJig(true);
+  if (savedId) openInspectionForJig(savedId);
+}
+
+async function saveJig(returnId=false) {
+  const id=document.getElementById('editId').value;
+  if(id && !canWrite()) { alert('수정 권한이 없습니다'); return; }
+  if(!id && !canAdd())  { alert('등록 권한이 없습니다'); return; }
+  if(!currentModels.length) { alert('모델명을 선택하세요'); return; }
+  const models=currentModels;
+  const model=models.join(' / ');
+  const name=document.getElementById('fName').value.trim();
+  if(!name) { alert('지그명을 입력하세요'); return; }
+  const jig={models,model,name,qty:parseInt(document.getElementById('fQty').value)||0,
+    location:document.getElementById('fLocation').value,date:document.getElementById('fDate').value,
+    phase:document.getElementById('fPhase').value,
+    status:document.getElementById('fStatus').value,maker:document.getElementById('fMaker').value,
+    contact:document.getElementById('fContact').value,phone:document.getElementById('fPhone').value,
+    customer:document.getElementById('fCustomer').value,
+    note:document.getElementById('fNote').value,photos:currentPhotos,updatedAt:new Date().toISOString()};
+
+  let savedId;
+  if(id) {
+    const old=await dbGet('jigs',parseInt(id)); jig.id=parseInt(id); jig.createdAt=old.createdAt;
+    const changes=[];
+    if(old.location!==jig.location) changes.push(`위치: ${old.location}→${jig.location}`);
+    if(old.qty!==jig.qty) changes.push(`수량: ${old.qty}→${jig.qty}`);
+    if(old.status!==jig.status) changes.push(`상태: ${old.status}→${jig.status}`);
+    await dbPut('jigs',jig);
+    if(changes.length) await dbAdd('history',{jigId:parseInt(id),date:new Date().toISOString().split('T')[0],type:'수정',content:changes.join(', '),newLocation:old.location!==jig.location?jig.location:undefined,newQty:old.qty!==jig.qty?jig.qty:undefined,createdAt:new Date().toISOString()});
+    savedId=parseInt(id);
+  } else {
+    jig.createdAt=new Date().toISOString();
+    savedId=await dbAdd('jigs',jig);
+    await dbAdd('history',{jigId:savedId,date:new Date().toISOString().split('T')[0],type:'등록',content:`${model} - ${name}`,createdAt:new Date().toISOString()});
+  }
+  bootstrap.Modal.getInstance(document.getElementById('jigModal')).hide();
+  renderDashboard(); renderAllList();
+  if(!returnId) alert(id?'수정되었습니다!':'지그가 등록되었습니다!');
+  return savedId;
+}
+
+async function deleteJig(id) {
+  if(!canDelete()) { alert('삭제 권한이 없습니다'); return; }
+  const j=await dbGet('jigs',id);
+  if(!confirm(`"${j.name}" 지그를 삭제하시겠습니까?`)) return;
+  await dbDelete('jigs',id);
+  const hists=await dbGetAll('history','jigId',id); for(const h of hists) await dbDelete('history',h.id);
+  const insps=await dbGetAll('inspections','jigId',id); for(const i of insps) await dbDelete('inspections',i.id);
+  renderAllList(); renderDashboard();
+}
+
+// ═══════════════════════════════════════
+// HISTORY MODAL
+// ═══════════════════════════════════════
+async function showHistoryModal(jigId) {
+  if(!canAdd()) { alert('등록 권한이 없습니다'); return; }
+  const locs=await getSetting('locations',[]);
+  const jig=await dbGet('jigs',jigId);
+  document.getElementById('histJigId').value=jigId;
+  document.getElementById('histDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('histContent').value='';
+  document.getElementById('histWorker').value='';
+  document.getElementById('histQty').value=jig?jig.qty:'';
+  document.getElementById('histNewLocation').innerHTML=locs.map(l=>`<option value="${l}" ${l===(jig&&jig.location)?'selected':''}>${l}</option>`).join('');
+  toggleHistFields();
+  new bootstrap.Modal(document.getElementById('historyModal')).show();
+}
+
+function toggleHistFields() {
+  const t=document.getElementById('histType').value;
+  document.getElementById('histLocationField').style.display=t==='위치이동'?'block':'none';
+  document.getElementById('histQtyField').style.display=t==='수량변경'?'block':'none';
+}
+
+async function saveHistory() {
+  const jigId=parseInt(document.getElementById('histJigId').value);
+  const type=document.getElementById('histType').value;
+  const hist={jigId,type,date:document.getElementById('histDate').value,
+    content:document.getElementById('histContent').value,worker:document.getElementById('histWorker').value,createdAt:new Date().toISOString()};
+  if(type==='위치이동') {
+    hist.newLocation=document.getElementById('histNewLocation').value;
+    const jig=await dbGet('jigs',jigId); if(jig){ jig.location=hist.newLocation; await dbPut('jigs',jig); }
+  }
+  if(type==='수량변경') {
+    hist.newQty=parseInt(document.getElementById('histQty').value)||0;
+    const jig=await dbGet('jigs',jigId); if(jig){ jig.qty=hist.newQty; await dbPut('jigs',jig); }
+  }
+  if(type==='수리') { const jig=await dbGet('jigs',jigId); if(jig){ jig.status='수리중'; await dbPut('jigs',jig); } }
+  await dbAdd('history',hist);
+  bootstrap.Modal.getInstance(document.getElementById('historyModal')).hide();
+  alert('이력이 저장되었습니다'); renderAllList(); renderDashboard();
+}
+
+// ═══════════════════════════════════════
+// DETAIL MODAL
+// ═══════════════════════════════════════
+async function showDetail(id) {
+  const j=await dbGet('jigs',id); if(!j) return;
+  const histories=await dbGetAll('history','jigId',id);
+  const inspections=await dbGetAll('inspections','jigId',id);
+  const detailPhaseMap=await getSetting('modelPhases',{});
+  histories.sort((a,b)=>b.createdAt>a.createdAt?1:-1);
+  inspections.sort((a,b)=>b.date>a.date?1:-1);
+
+  document.getElementById('detailTitle').innerHTML=`<i class="bi bi-tools me-2"></i>${j.model} - ${j.name}`;
+  const photosHtml=j.photos&&j.photos.length?`<div class="photo-grid mb-3">${j.photos.map(p=>`<div class="photo-thumb" style="width:90px;height:90px"><img src="${p}" style="width:100%;height:100%;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openLightbox('${p}')"></div>`).join('')}</div>`:'<div class="text-muted small mb-3">사진 없음</div>';
+  const lastInspHtml=inspections.length?`<span class="badge bg-success">${inspections[0].date} - ${inspections[0].result}</span>`:'<span class="badge bg-secondary">미점검</span>';
+  const typeClass={'위치이동':'move','수리':'repair','점검':'inspect'};
+  const histHtml=histories.slice(0,10).map(h=>`<div class="history-item history-${typeClass[h.type]||''} mb-2">
+    <div class="d-flex justify-content-between"><span class="h-type">[${h.type}]</span><span class="h-date">${h.date}</span></div>
+    ${h.content?`<div class="text-secondary small">${h.content}</div>`:''}
+    ${h.newLocation?`<div class="small"><i class="bi bi-arrow-right text-warning me-1"></i>${h.newLocation}</div>`:''}
+    ${h.worker?`<div class="small text-muted"><i class="bi bi-person me-1"></i>${h.worker}</div>`:''}
+  </div>`).join('')||'<div class="text-muted small">이력 없음</div>';
+
+  const w=canWrite();
+  document.getElementById('detailBody').innerHTML=`
+    <div class="row g-3">
+      <div class="col-md-5">
+        <h6 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-images me-2 text-primary"></i>사진</h6>
+        ${photosHtml}
+        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-3"><i class="bi bi-info-circle me-2 text-primary"></i>기본 정보</h6>
+        <table class="table table-sm">
+          <tr><th class="text-muted" style="width:40%">모델명</th><td><span class="badge-model">${j.model}</span></td></tr>
+          <tr><th class="text-muted">단계</th><td>${phaseBadge(j.phase)}</td></tr>
+          ${j.customer?`<tr><th class="text-muted">고객사</th><td><span class="badge bg-secondary">${j.customer}</span></td></tr>`:''}
+          <tr><th class="text-muted">지그명</th><td class="fw-bold">${j.name}</td></tr>
+          <tr><th class="text-muted">보유수량</th><td><span class="badge-qty">${j.qty||0}개</span></td></tr>
+          <tr><th class="text-muted">보관위치</th><td>${j.location||'-'}</td></tr>
+          <tr><th class="text-muted">상태</th><td>${statusBadge(j.status)}</td></tr>
+          <tr><th class="text-muted">입고일자</th><td>${j.date||'-'}</td></tr>
+          <tr><th class="text-muted">마지막점검</th><td>${lastInspHtml}</td></tr>
+        </table>
+        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-3"><i class="bi bi-building me-2 text-primary"></i>제조사 정보</h6>
+        <table class="table table-sm">
+          <tr><th class="text-muted" style="width:40%">제조사</th><td>${j.maker||'-'}</td></tr>
+          <tr><th class="text-muted">담당자</th><td>${j.contact||'-'}</td></tr>
+          <tr><th class="text-muted">연락처</th><td>${j.phone?`<a href="tel:${j.phone}">${j.phone}</a>`:'-'}</td></tr>
+        </table>
+        ${j.note?`<div class="alert alert-info py-2 small"><i class="bi bi-chat-left-text me-1"></i>${j.note}</div>`:''}
+        <div class="d-flex gap-2 mt-3 flex-wrap">
+          <button class="btn btn-info btn-sm flex-fill text-white" onclick="bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();openInspectionForJig(${j.id})"><i class="bi bi-clipboard2-check me-1"></i>점검시트</button>
+          ${w?`<button class="btn btn-primary btn-sm flex-fill" onclick="bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();editJig(${j.id})"><i class="bi bi-pencil me-1"></i>수정</button>
+          <button class="btn btn-warning btn-sm flex-fill" onclick="bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();showHistoryModal(${j.id})"><i class="bi bi-clock-history me-1"></i>이력추가</button>`:''}
+        </div>
+      </div>
+      <div class="col-md-7">
+        <h6 class="fw-bold border-bottom pb-2 mb-3"><i class="bi bi-clock-history me-2 text-primary"></i>변경 이력 (최근 10건)</h6>
+        ${histHtml}
+        <h6 class="fw-bold border-bottom pb-2 mb-3 mt-3"><i class="bi bi-file-earmark-check me-2 text-primary"></i>점검 이력</h6>
+        ${inspections.slice(0,5).map(i=>`<div class="d-flex align-items-center gap-2 mb-2 p-2 border rounded">
+          <span class="badge bg-${i.result==='양호'?'success':i.result==='수리필요'?'warning':'danger'}">${i.result}</span>
+          <span class="small">${i.date}</span>
+          ${i.note?`<span class="text-muted small">${i.note}</span>`:''}
+        </div>`).join('')||'<div class="text-muted small">점검 이력 없음</div>'}
+      </div>
+    </div>`;
+  new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+// ═══════════════════════════════════════
+// PHOTO
+// ═══════════════════════════════════════
+function handlePhotoSelect(e){ processPhotoFiles(Array.from(e.target.files)); }
+function handlePhotoDrop(e){ e.preventDefault(); handleDragLeave('photoDrop'); processPhotoFiles(Array.from(e.dataTransfer.files).filter(f=>f.type.startsWith('image/'))); }
+function processPhotoFiles(files){ files.forEach(f=>{ const r=new FileReader(); r.onload=ev=>{ currentPhotos.push(ev.target.result); renderPhotoGrid(); }; r.readAsDataURL(f); }); }
+function renderPhotoGrid(){ document.getElementById('photoGrid').innerHTML=currentPhotos.map((p,i)=>`<div class="photo-thumb"><img src="${p}" onclick="openLightbox('${p}')"><button class="del-photo" onclick="removePhoto(${i})"><i class="bi bi-x"></i></button></div>`).join(''); }
+function removePhoto(i){ currentPhotos.splice(i,1); renderPhotoGrid(); }
+
+// 사진 Ctrl+V 붙여넣기
+document.addEventListener('paste', function(e) {
+  const modal = document.getElementById('jigModal');
+  if (!modal || !modal.classList.contains('show')) return;
+  const items = Array.from(e.clipboardData.items||[]);
+  const imgItems = items.filter(it=>it.type.startsWith('image/'));
+  if (!imgItems.length) return;
+  e.preventDefault();
+  processPhotoFiles(imgItems.map(it=>it.getAsFile()).filter(Boolean));
+});
+
+// ═══════════════════════════════════════
+// EXCEL (legacy placeholder - replaced by BOM upload)
+// ═══════════════════════════════════════
+
+// ═══════════════════════════════════════
+// QUICK ADD
+// ═══════════════════════════════════════
+async function quickAddLocation(){
+  const n=prompt('추가할 보관위치:'); if(!n||!n.trim()) return;
+  const locs=await getSetting('locations',[]); if(!locs.includes(n.trim())){ locs.push(n.trim()); await setSetting('locations',locs); }
+  await populateSelects(n.trim());
+}
+
+// ═══════════════════════════════════════
+// MODEL AUTOCOMPLETE
+// ═══════════════════════════════════════
+async function filterModelDropdown(q) {
+  const bomModels    = await getSetting('bomModels', []);
+  const customModels = await getSetting('models', []);
+  const all = [...new Set([...bomModels, ...customModels])].sort();
+  const dropdown = document.getElementById('fModelDropdown');
+  const ql = q.trim().toLowerCase();
+  if (!ql) { dropdown.classList.remove('show'); return; }
+  const matches = all.filter(m => m.toLowerCase().includes(ql)).slice(0, 40);
+  if (!matches.length) { dropdown.classList.remove('show'); return; }
+  const esc = ql.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  dropdown.innerHTML = matches.map(m => {
+    const hi = m.replace(new RegExp(esc,'gi'), s=>`<mark>${s}</mark>`);
+    return `<div class="autocomplete-item" onmousedown="selectModel(event,'${m.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">${hi}</div>`;
+  }).join('');
+  dropdown.classList.add('show');
+}
+
+async function selectModel(e, m) {
+  e.preventDefault();
+  document.getElementById('fModelDropdown').classList.remove('show');
+  const isShared = document.getElementById('fIsShared').checked;
+  if (isShared) {
+    if (!currentModels.includes(m)) { currentModels.push(m); renderModelTags(); }
+    document.getElementById('fModelInput').value = '';
+  } else {
+    currentModels = [m];
+    renderModelTags();
+    // BOM에서 고객사 자동 입력
+    const customerMap = await getSetting('bomCustomerMap', {});
+    const customerEl = document.getElementById('fCustomer');
+    if (customerEl && customerMap[m]) customerEl.value = customerMap[m];
+  }
+}
+
+function renderModelTags() {
+  const tags = document.getElementById('fModelTags');
+  const inp = document.getElementById('fModelInput');
+  const isShared = document.getElementById('fIsShared').checked;
+  if (!tags) return;
+  tags.innerHTML = currentModels.map((m, i) =>
+    `<span class="model-tag">${m}<button class="tag-del" type="button" onclick="removeModel(${i})">✕</button></span>`
+  ).join('');
+  if (!isShared) {
+    inp.value = currentModels.length ? currentModels[0] : '';
+    inp.placeholder = '모델명 검색 (예: J)...';
+  } else {
+    inp.value = '';
+    inp.placeholder = currentModels.length ? '추가 모델 검색...' : '모델명 검색 (예: J)...';
+  }
+  document.getElementById('fModel').value = currentModels.join(' / ');
+}
+
+function removeModel(idx) {
+  currentModels.splice(idx, 1);
+  renderModelTags();
+}
+
+function toggleSharedMode() {
+  // 공용지그 해제 시 첫 번째 모델만 유지
+  if (!document.getElementById('fIsShared').checked && currentModels.length > 1) {
+    currentModels = [currentModels[0]];
+  }
+  renderModelTags();
+}
+
+document.addEventListener('click', function(e) {
+  const wrap = document.querySelector('.autocomplete-wrapper');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('fModelDropdown').classList.remove('show');
+  }
+});
+
+// ═══════════════════════════════════════
+// BOM 파일 업로드
+// ═══════════════════════════════════════
+async function renderBomUpload() {
+  const bomModels = await getSetting('bomModels', []);
+  const bomFileName = await getSetting('bomFileName', '');
+  const statusEl = document.getElementById('bomStatus');
+  const listEl = document.getElementById('bomModelList');
+  const countEl = document.getElementById('bomModelCount');
+  if (bomFileName && statusEl) {
+    statusEl.innerHTML = `<div class="bom-file-badge"><i class="bi bi-file-earmark-excel-fill"></i><div><strong>${bomFileName}</strong><br><small class="text-muted">${bomModels.length}개 모델 불러옴</small></div></div>`;
+  }
+  if (countEl) countEl.textContent = bomModels.length;
+  if (listEl) {
+    if (!bomModels.length) { listEl.innerHTML = '<span class="text-muted">업로드된 BOM 파일이 없습니다.</span>'; return; }
+    listEl.innerHTML = '<div class="d-flex flex-wrap gap-1">' +
+      bomModels.map(m=>`<span class="badge-model" style="display:inline-block;margin:2px">${m}</span>`).join('') +
+      '</div>';
+  }
+}
+
+function handleBomDrop(e) {
+  const file = e.dataTransfer.files[0];
+  if (file) uploadBomFile(file);
+}
+
+async function uploadBomFile(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('bomStatus');
+  statusEl.innerHTML = '<div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>파일 분석 중...</div>';
+  try {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    let models = [];
+    if (wb.SheetNames.includes('제품코드')) {
+      const ws = wb.Sheets['제품코드'];
+      const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      // 헤더 행에서 '제품명' 열 인덱스 찾기
+      let nameCol = -1, customerCol = -1;
+      for (let r = 0; r < rows.length; r++) {
+        const ni = rows[r].findIndex(c => String(c).trim() === '제품명');
+        const ci = rows[r].findIndex(c => String(c).trim() === '고객사');
+        if (ni !== -1) { nameCol = ni; customerCol = ci; break; }
+      }
+      if (nameCol !== -1) {
+        const seen = new Set();
+        const customerMap = {};
+        rows.forEach(row => {
+          const v = String(row[nameCol]||'').trim();
+          if (v && v !== '제품명' && !seen.has(v)) {
+            seen.add(v); models.push(v);
+            if (customerCol !== -1) customerMap[v] = String(row[customerCol]||'').trim();
+          }
+        });
+        models.sort();
+        await setSetting('bomCustomerMap', customerMap);
+      }
+    }
+    if (!models.length) { statusEl.innerHTML = '<div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>제품코드 시트 또는 제품명 열을 찾을 수 없습니다.</div>'; return; }
+    await setSetting('bomModels', models);
+    await setSetting('bomFileName', file.name);
+    statusEl.innerHTML = `<div class="bom-file-badge"><i class="bi bi-file-earmark-excel-fill"></i><div><strong>${file.name}</strong><br><small class="text-muted">${models.length}개 모델 불러옴</small></div></div>`;
+    await renderBomUpload();
+  } catch(err) {
+    statusEl.innerHTML = `<div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>오류: ${err.message}</div>`;
+  }
+}
+
+// ═══════════════════════════════════════
+// DRAG & DROP
+// ═══════════════════════════════════════
+function handleDragOver(e,id){ e.preventDefault(); document.getElementById(id).classList.add('dragover'); }
+function handleDragLeave(id){ document.getElementById(id).classList.remove('dragover'); }
+
+// ═══════════════════════════════════════
+// LIGHTBOX
+// ═══════════════════════════════════════
+function openLightbox(src){ document.getElementById('lightboxImg').src=src; document.getElementById('lightbox').classList.add('show'); }
+function closeLightbox(){ document.getElementById('lightbox').classList.remove('show'); }
+
+// ─── 지그 호버 미리보기 ───
+const jigPreviewMap = {};
+
+function showJigPreview(e, id) {
+  const j = jigPreviewMap[id]; if (!j) return;
+  const card = document.getElementById('jigPreviewCard');
+  const imgWrap = document.getElementById('jigPreviewImg');
+  imgWrap.innerHTML = j.photo ? `<img src="${j.photo}" alt="">` : `<i class="bi bi-tools"></i>`;
+  document.getElementById('jigPreviewName').textContent  = j.name;
+  document.getElementById('jigPreviewModel').textContent = j.model||'-';
+  document.getElementById('jigPreviewPhase').innerHTML   = phaseBadge(j.phase);
+  document.getElementById('jigPreviewLoc').textContent   = j.location||'-';
+  document.getElementById('jigPreviewStatus').innerHTML  = statusBadge(j.status);
+  document.getElementById('jigPreviewQty').textContent   = (j.qty||0)+'개';
+  card.style.display = 'block';
+  _placeJigPreview(e);
+}
+function moveJigPreview(e) { _placeJigPreview(e); }
+function hideJigPreview() { document.getElementById('jigPreviewCard').style.display='none'; }
+function _placeJigPreview(e) {
+  const card = document.getElementById('jigPreviewCard');
+  const w=230, h=card.offsetHeight||260, gap=16;
+  let x = e.clientX + gap;
+  let y = e.clientY - h/2;
+  if (x + w > window.innerWidth)  x = e.clientX - w - gap;
+  if (y < 8) y = 8;
+  if (y + h > window.innerHeight - 8) y = window.innerHeight - h - 8;
+  card.style.left = x + 'px';
+  card.style.top  = y + 'px';
+}
+
+function showThumbZoom(e, src) {
+  const ov = document.getElementById('thumbZoomOverlay');
+  ov.src = src;
+  ov.style.display = 'block';
+  moveThumbZoom(e);
+}
+function moveThumbZoom(e) {
+  const ov = document.getElementById('thumbZoomOverlay');
+  if (ov.style.display === 'none') return;
+  const gap = 12, size = 200;
+  let x = e.clientX + gap;
+  let y = e.clientY + gap;
+  if (x + size > window.innerWidth)  x = e.clientX - size - gap;
+  if (y + size > window.innerHeight) y = e.clientY - size - gap;
+  ov.style.left = x + 'px';
+  ov.style.top  = y + 'px';
+}
+function hideThumbZoom() {
+  document.getElementById('thumbZoomOverlay').style.display = 'none';
+}
+
+// ═══════════════════════════════════════
+// EXPORT / IMPORT
+// ═══════════════════════════════════════
+async function exportAllExcel(){
+  const jigs=await dbGetAll('jigs');
+  const mp=await getSetting('modelPhases',{});
+  const data=jigs.map(j=>({'모델명':j.model,'단계':mp[j.model]||'개발','지그명':j.name,'보유수량':j.qty,'보관위치':j.location,'상태':j.status,'입고일자':j.date,'제조사':j.maker,'담당자':j.contact,'연락처':j.phone,'비고':j.note,'마지막점검':j.lastInspection||''}));
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'지그목록');
+  XLSX.writeFile(wb,`지그목록_${new Date().toISOString().split('T')[0]}.xlsx`);
+}
+async function exportData(){
+  const jigs=await dbGetAll('jigs'); const histories=await dbGetAll('history'); const inspections=await dbGetAll('inspections');
+  const models=await getSetting('models',[]); const locations=await getSetting('locations',[]); const modelPhases=await getSetting('modelPhases',{});
+  const blob=new Blob([JSON.stringify({jigs,histories,inspections,models,locations,modelPhases},null,2)],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`jig_backup_${new Date().toISOString().split('T')[0]}.json`; a.click();
+}
+async function importData(){
+  const file=document.getElementById('importFile').files[0]; if(!file){ alert('파일을 선택하세요'); return; }
+  if(!confirm('데이터를 병합합니까?')) return;
+  const data=JSON.parse(await file.text());
+  if(data.models) await setSetting('models',data.models);
+  if(data.locations) await setSetting('locations',data.locations);
+  if(data.modelPhases) await setSetting('modelPhases',data.modelPhases);
+  if(data.jigs) for(const j of data.jigs){ delete j.id; await dbAdd('jigs',j); }
+  if(data.histories) for(const h of data.histories){ delete h.id; await dbAdd('history',h); }
+  if(data.inspections) for(const i of data.inspections){ delete i.id; await dbAdd('inspections',i); }
+  alert('가져오기 완료!'); renderDashboard();
+}
+async function clearAllData(){
+  if(!isAdmin()){ alert('관리자만 사용 가능합니다'); return; }
+  if(!confirm('⚠️ 모든 데이터를 삭제합니다. 계속하시겠습니까?')) return;
+  if(!confirm('정말로 삭제하시겠습니까?')) return;
+  for(const s of['jigs','history','inspections']){ const all=await dbGetAll(s); for(const r of all) await dbDelete(s,r.id); }
+  alert('초기화 완료'); renderDashboard();
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+async function init() {
+  await initDB();
+
+  // Restore session
+  const saved = localStorage.getItem('jigUser');
+  if (saved) {
+    try {
+      currentUser = JSON.parse(saved);
+      // Verify non-admin users still exist and approved
+      if (currentUser.perm !== 'admin') {
+        const u = await dbGet('users', currentUser.id);
+        if (!u || u.status !== 'approved') { localStorage.removeItem('jigUser'); currentUser=null; }
+        else { currentUser.perm = u.perm; currentUser.canDelete = u.canDelete||false; } // refresh from DB
+      }
+    } catch(e) { currentUser=null; }
+  }
+
+  // Restore saved credentials (remember me)
+  const savedCred = localStorage.getItem('jigRemember');
+  if (savedCred) {
+    try {
+      const cred = JSON.parse(savedCred);
+      document.getElementById('loginEmail').value = cred.email || '';
+      document.getElementById('loginPw').value    = cred.pw    || '';
+      document.getElementById('rememberMe').checked = true;
+    } catch(e) {}
+  }
+
+  if (currentUser) {
+    launchApp();
+  }
+  // loginOverlay stays visible if no session
+
+  // Seed sample data if empty
+  const jigs = await dbGetAll('jigs');
+  if (jigs.length === 0) {
+    const models=['MODEL-A100','MODEL-B200','MODEL-C300'];
+    const locations=['A창고-1번','A창고-2번','B창고-1번','B창고-2번','C공정라인'];
+    await setSetting('models',models); await setSetting('locations',locations);
+    await setSetting('modelPhases',{'MODEL-A100':'양산','MODEL-B200':'개발','MODEL-C300':'단종'});
+    const sampleJigs=[
+      {model:'MODEL-A100',name:'바디 고정지그 A',qty:3,location:'A창고-1번',date:'2024-03-15',status:'정상',maker:'삼성정밀',contact:'김철수',phone:'010-1234-5678',note:'PO-2024-001',photos:[]},
+      {model:'MODEL-A100',name:'커버 체결지그',qty:2,location:'A창고-1번',date:'2024-06-20',status:'정상',maker:'정밀기계',contact:'이영희',phone:'010-2345-6789',note:'',photos:[]},
+      {model:'MODEL-B200',name:'프레임 용접지그',qty:1,location:'B창고-1번',date:'2023-11-10',status:'수리중',maker:'한국정밀',contact:'박민수',phone:'010-3456-7890',note:'수리중',photos:[]},
+      {model:'MODEL-B200',name:'조립 위치결정 지그',qty:4,location:'B창고-2번',date:'2024-01-05',status:'정상',maker:'정밀기계',contact:'이영희',phone:'010-2345-6789',note:'',photos:[]},
+      {model:'MODEL-C300',name:'검사용 기준지그',qty:2,location:'C공정라인',date:'2024-09-01',status:'정상',maker:'검사장비',contact:'최지민',phone:'010-4567-8901',note:'점검주기:6개월',photos:[]},
+    ];
+    for(const j of sampleJigs){ j.createdAt=new Date().toISOString(); const nid=await dbAdd('jigs',j); await dbAdd('history',{jigId:nid,date:j.date,type:'등록',content:`${j.model} - ${j.name}`,createdAt:new Date().toISOString()}); }
+  }
+}
+
+init();
+</script>
+</body>
+</html>
