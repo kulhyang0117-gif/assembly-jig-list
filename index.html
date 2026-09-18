@@ -1403,21 +1403,17 @@ async function openInspectionForJig(jigId) {
 async function onInspJigChange() {
   const jigId = parseInt(document.getElementById('inspJigSelect').value);
   if (!jigId) { newInspectionSheet(); return; }
-  // 해당 지그의 가장 최근 점검 기록에서 sections 템플릿 불러오기
-  const all = await dbGetAll('inspections');
-  const forJig = all.filter(i => i.jigId === jigId && i.sections && i.sections.length);
-  forJig.sort((a,b) => b.createdAt > a.createdAt ? 1 : -1);
-  const latest = forJig[0];
-  if (latest) {
-    // 이전 점검의 항목 구조만 복사, 판정은 초기화
-    const sections = JSON.parse(JSON.stringify(latest.sections));
+  // settings 테이블에서 지그별 영구 템플릿 로드
+  const template = await getSetting('insp_tmpl_' + jigId, null);
+  if (template && template.sections && template.sections.length) {
+    const sections = JSON.parse(JSON.stringify(template.sections));
     sections.forEach(s => s.groups.forEach(g => g.items.forEach(it => { it.judgment=''; })));
     inspState = {
       jigId,
       date: new Date().toISOString().split('T')[0],
-      mgmtNo: latest.mgmtNo||'',
-      signs: latest.signs||['','',''],
-      images: latest.images||[null,null,null],
+      mgmtNo: template.mgmtNo||'',
+      signs: template.signs||['','',''],
+      images: template.images||[null,null,null],
       sections,
       finalJudgment: {조립:'',품질:'',개발:''}
     };
@@ -1654,10 +1650,25 @@ function removeInspItem(si, gi, ii) {
   renderInspSheet();
 }
 
+function compressImage(dataUrl, maxW=900, quality=0.8) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxW) { h = Math.round(h * maxW / w); w = maxW; }
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(c.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
 function loadInspImg(n, input) {
   const file = input.files[0]; if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => { setInspImgData(n, e.target.result); input.value = ''; };
+  reader.onload = async e => { await setInspImgData(n, e.target.result); input.value = ''; };
   reader.readAsDataURL(file);
 }
 let lastFocusedInspImg = 1;
@@ -1670,11 +1681,12 @@ function focusInspImg(n) {
   });
 }
 
-function setInspImgData(n, dataUrl) {
-  inspState.images[n-1] = dataUrl;
+async function setInspImgData(n, dataUrl) {
+  const compressed = await compressImage(dataUrl);
+  inspState.images[n-1] = compressed;
   const box = document.getElementById('inspImgBox'+n);
   const del = document.getElementById('inspImgDel'+n);
-  if (box) box.innerHTML = `<img src="${dataUrl}" alt="">`;
+  if (box) box.innerHTML = `<img src="${compressed}" alt="">`;
   if (del) del.style.display = '';
 }
 
@@ -1699,7 +1711,7 @@ document.addEventListener('paste', function(e) {
   const file = imgItem.getAsFile();
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = ev => { setInspImgData(slot, ev.target.result); focusInspImg(slot); };
+  reader.onload = async ev => { await setInspImgData(slot, ev.target.result); focusInspImg(slot); };
   reader.readAsDataURL(file);
 });
 
@@ -1730,6 +1742,20 @@ async function saveInspectionSheet() {
   const insp = { ...inspState, result, createdAt: new Date().toISOString() };
   await dbAdd('inspections', insp);
   await dbAdd('history', {jigId, date, type:'점검', content:`점검결과: ${result}`, createdAt:new Date().toISOString()});
+  // 템플릿 영구 저장 (이미지·항목내용·비고 보존, 판정만 초기화)
+  const templateData = {
+    sections: inspState.sections.map(s => ({
+      ...s,
+      groups: s.groups.map(g => ({
+        ...g,
+        items: g.items.map(it => ({ product: it.product, note: it.note, judgment: '' }))
+      }))
+    })),
+    images: inspState.images,
+    mgmtNo: inspState.mgmtNo,
+    signs: inspState.signs
+  };
+  await setSetting('insp_tmpl_' + jigId, templateData);
   const jig = await dbGet('jigs', jigId);
   if (jig) { jig.lastInspection = date; await dbPut('jigs', jig); }
   alert('점검 시트가 저장되었습니다.');
