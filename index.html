@@ -1722,10 +1722,14 @@ async function saveInspectionSheet() {
   inspState.mgmtNo = document.getElementById('inspMgmtNo').value;
   inspState.signs  = ['inspSign1','inspSign2','inspSign3'].map(id=>document.getElementById(id).value);
   const fj = inspState.finalJudgment;
-  const result = (fj.조립==='OK'&&fj.품질==='OK'&&fj.개발==='OK') ? 'OK' : (Object.values(fj).includes('NG') ? 'NG' : '미판정');
+  const allJudgments = inspState.sections.flatMap(s => s.groups.flatMap(g => g.items.map(it => it.judgment)));
+  const result = allJudgments.length === 0 ? '미판정'
+    : allJudgments.includes('NG') ? 'NG'
+    : allJudgments.every(j => j === 'OK') ? 'OK'
+    : '미판정';
   const insp = { ...inspState, result, createdAt: new Date().toISOString() };
   await dbAdd('inspections', insp);
-  await dbAdd('history', {jigId, date, type:'점검', content:`점검결과: ${result} (조립:${fj.조립||'-'} / 품질:${fj.품질||'-'} / 개발:${fj.개발||'-'})`, createdAt:new Date().toISOString()});
+  await dbAdd('history', {jigId, date, type:'점검', content:`점검결과: ${result}`, createdAt:new Date().toISOString()});
   const jig = await dbGet('jigs', jigId);
   if (jig) { jig.lastInspection = date; await dbPut('jigs', jig); }
   alert('점검 시트가 저장되었습니다.');
