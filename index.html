@@ -7,6 +7,7 @@
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root { --primary:#1a3a5c; --accent:#2e86de; --success:#27ae60; --warning:#f39c12; --danger:#e74c3c; --light-bg:#f0f4f8; }
 body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
@@ -760,7 +761,6 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
 // ═══════════════════════════════════════
 // GLOBALS
 // ═══════════════════════════════════════
-let db;
 let currentUser = null;
 let currentPhotos = [];
 let currentModels = [];
@@ -769,43 +769,45 @@ const ADMIN_EMAIL = 'kulhyang0117@gmail.com';
 const ADMIN_PW    = 'jxy0830!';
 
 // ═══════════════════════════════════════
-// INDEXEDDB
+// SUPABASE
 // ═══════════════════════════════════════
-function initDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('JigManagementDB', 4);
-    req.onupgradeneeded = e => {
-      const d = e.target.result;
-      if (!d.objectStoreNames.contains('jigs')) {
-        const s = d.createObjectStore('jigs', { keyPath:'id', autoIncrement:true });
-        s.createIndex('model','model',{unique:false});
-      }
-      if (!d.objectStoreNames.contains('history')) {
-        const s = d.createObjectStore('history', { keyPath:'id', autoIncrement:true });
-        s.createIndex('jigId','jigId',{unique:false});
-      }
-      if (!d.objectStoreNames.contains('inspections')) {
-        const s = d.createObjectStore('inspections', { keyPath:'id', autoIncrement:true });
-        s.createIndex('jigId','jigId',{unique:false});
-      }
-      if (!d.objectStoreNames.contains('settings')) d.createObjectStore('settings',{keyPath:'key'});
-      if (!d.objectStoreNames.contains('users')) {
-        const s = d.createObjectStore('users',{keyPath:'id',autoIncrement:true});
-        s.createIndex('email','email',{unique:true});
-      }
-    };
-    req.onsuccess = e => { db = e.target.result; resolve(); };
-    req.onerror = reject;
-  });
+const SUPABASE_URL = 'https://kblzfdllkyunljfxagie.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtibHpmZGxsa3l1bmxqZnhhZ2llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYxMzcxMjUsImV4cCI6MjA4MTcxMzEyNX0.FfNXcVh1U668QRoKplwu-DcSRVssIywhRb41_LgQAcc';
+const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function initDB() { /* Supabase - no local init needed */ }
+async function dbGet(store, key) {
+  const { data } = await _sb.from(store).select('*').eq('id', key).maybeSingle();
+  return data;
 }
-const tx = (store,mode='readonly') => db.transaction(store,mode).objectStore(store);
-function dbGet(store,key){ return new Promise((r,j)=>{ const q=tx(store).get(key); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
-function dbGetAll(store,idx,query){ return new Promise((r,j)=>{ const os=tx(store); const q=idx?os.index(idx).getAll(query):os.getAll(); q.onsuccess=()=>r(q.result||[]); q.onerror=j; }); }
-function dbPut(store,data){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').put(data); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
-function dbAdd(store,data){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').add(data); q.onsuccess=()=>r(q.result); q.onerror=j; }); }
-function dbDelete(store,key){ return new Promise((r,j)=>{ const q=tx(store,'readwrite').delete(key); q.onsuccess=()=>r(); q.onerror=j; }); }
-async function getSetting(key,def=[]){ const r=await dbGet('settings',key); return r?r.value:def; }
-async function setSetting(key,value){ await dbPut('settings',{key,value}); }
+async function dbGetAll(store, idx, query) {
+  let q = _sb.from(store).select('*');
+  if (idx !== undefined && query !== undefined) q = q.eq(idx, query);
+  const { data } = await q;
+  return data || [];
+}
+async function dbAdd(store, obj) {
+  const d = { ...obj }; delete d.id;
+  const { data, error } = await _sb.from(store).insert(d).select().single();
+  if (error) { console.error('dbAdd error', store, error); return null; }
+  return data?.id;
+}
+async function dbPut(store, obj) {
+  const { data, error } = await _sb.from(store).upsert(obj).select().single();
+  if (error) { console.error('dbPut error', store, error); return null; }
+  return data?.id;
+}
+async function dbDelete(store, key) {
+  const { error } = await _sb.from(store).delete().eq('id', key);
+  if (error) console.error('dbDelete error', store, error);
+}
+async function getSetting(key, def) {
+  const { data } = await _sb.from('settings').select('value').eq('key', key).maybeSingle();
+  return data?.value ?? def;
+}
+async function setSetting(key, value) {
+  await _sb.from('settings').upsert({ key, value });
+}
 
 // ═══════════════════════════════════════
 // AUTH
