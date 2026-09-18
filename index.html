@@ -480,6 +480,7 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
           <div class="card shadow-sm">
             <div class="card-header fw-bold" style="background:#f8f9fa">데이터 관리</div>
             <div class="card-body">
+              <button class="btn btn-warning mb-2 w-100 fw-bold" onclick="migrateFromIndexedDB()"><i class="bi bi-arrow-repeat me-2"></i>기존 데이터 마이그레이션 (브라우저→Supabase)</button>
               <button class="btn btn-outline-primary mb-2 w-100" onclick="exportData()"><i class="bi bi-upload me-2"></i>JSON 백업</button>
               <div class="input-group mb-2">
                 <input type="file" class="form-control" id="importFile" accept=".json">
@@ -807,6 +808,79 @@ async function getSetting(key, def) {
 }
 async function setSetting(key, value) {
   await _sb.from('settings').upsert({ key, value });
+}
+
+// ── 모델 목록 캐시 (자동완성 성능용) ──
+let _modelCache = null;
+function clearModelCache() { _modelCache = null; }
+async function getModelsForAutocomplete() {
+  if (_modelCache) return _modelCache;
+  const [bom, custom] = await Promise.all([getSetting('bomModels',[]), getSetting('models',[])]);
+  _modelCache = [...new Set([...bom, ...custom])].sort();
+  return _modelCache;
+}
+
+// ── IndexedDB → Supabase 마이그레이션 ──
+async function migrateFromIndexedDB() {
+  if (!confirm('브라우저(IndexedDB)에 저장된 기존 데이터를 Supabase로 이전합니다.\n계속하시겠습니까?')) return;
+  let idb;
+  try {
+    idb = await new Promise((res, rej) => {
+      const r = indexedDB.open('JigManagementDB', 4);
+      r.onsuccess = e => res(e.target.result);
+      r.onerror = rej;
+    });
+  } catch(e) {
+    alert('기존 IndexedDB를 찾을 수 없습니다. 이미 마이그레이션되었거나 데이터가 없습니다.'); return;
+  }
+  function idbAll(db, store) {
+    return new Promise((res, rej) => {
+      const tx = db.transaction(store, 'readonly');
+      const q = tx.objectStore(store).getAll();
+      q.onsuccess = () => res(q.result || []);
+      q.onerror = rej;
+    });
+  }
+  try {
+    const [jigs, histories, inspections, users, settings] =
+      await Promise.all(['jigs','history','inspections','users','settings'].map(s => idbAll(idb, s)));
+
+    if (!jigs.length && !users.length) { alert('마이그레이션할 데이터가 없습니다.'); return; }
+
+    // settings
+    for (const s of settings) await setSetting(s.key, s.value);
+
+    // jigs (id 재매핑)
+    const idMap = {};
+    for (const j of jigs) {
+      const oldId = j.id; const d = {...j}; delete d.id;
+      const newId = await dbAdd('jigs', d);
+      if (newId) idMap[oldId] = newId;
+    }
+    // history
+    for (const h of histories) {
+      const d = {...h}; delete d.id;
+      if (idMap[d.jigId]) d.jigId = idMap[d.jigId];
+      await dbAdd('history', d);
+    }
+    // inspections
+    for (const i of inspections) {
+      const d = {...i}; delete d.id;
+      if (idMap[d.jigId]) d.jigId = idMap[d.jigId];
+      await dbAdd('inspections', d);
+    }
+    // users (중복 이메일 제외)
+    for (const u of users) {
+      const { data: exist } = await _sb.from('users').select('id').eq('email', u.email).maybeSingle();
+      if (!exist) { const d = {...u}; delete d.id; await dbAdd('users', d); }
+    }
+    clearModelCache();
+    alert(`마이그레이션 완료!\n지그 ${jigs.length}개 · 이력 ${histories.length}개 · 점검 ${inspections.length}개 · 사용자 ${users.length}명`);
+    renderDashboard(); renderAllList();
+  } catch(e) {
+    console.error(e);
+    alert('마이그레이션 오류: ' + e.message);
+  } finally { idb.close(); }
 }
 
 // ═══════════════════════════════════════
@@ -1726,11 +1800,13 @@ async function addModel() {
   const models=await getSetting('models',[]);
   if(!models.includes(v)){ models.push(v); await setSetting('models',models);
     const phases=await getSetting('modelPhases',{}); if(!phases[v]){ phases[v]='개발'; await setSetting('modelPhases',phases); } }
+  clearModelCache();
   document.getElementById('newModelInput').value=''; renderSettings();
 }
 async function removeModel(i) {
   const models=await getSetting('models',[]); const removed=models[i]; models.splice(i,1); await setSetting('models',models);
   if(removed){ const p=await getSetting('modelPhases',{}); delete p[removed]; await setSetting('modelPhases',p); }
+  clearModelCache();
   renderSettings();
 }
 async function setModelPhase(name,phase) {
@@ -2067,9 +2143,7 @@ async function quickAddLocation(){
 // MODEL AUTOCOMPLETE
 // ═══════════════════════════════════════
 async function filterModelDropdown(q) {
-  const bomModels    = await getSetting('bomModels', []);
-  const customModels = await getSetting('models', []);
-  const all = [...new Set([...bomModels, ...customModels])].sort();
+  const all = await getModelsForAutocomplete();
   const dropdown = document.getElementById('fModelDropdown');
   const ql = q.trim().toLowerCase();
   if (!ql) { dropdown.classList.remove('show'); return; }
@@ -2199,6 +2273,7 @@ async function uploadBomFile(file) {
     if (!models.length) { statusEl.innerHTML = '<div class="text-danger small"><i class="bi bi-exclamation-circle me-1"></i>제품코드 시트 또는 제품명 열을 찾을 수 없습니다.</div>'; return; }
     await setSetting('bomModels', models);
     await setSetting('bomFileName', file.name);
+    clearModelCache();
     statusEl.innerHTML = `<div class="bom-file-badge"><i class="bi bi-file-earmark-excel-fill"></i><div><strong>${file.name}</strong><br><small class="text-muted">${models.length}개 모델 불러옴</small></div></div>`;
     await renderBomUpload();
   } catch(err) {
