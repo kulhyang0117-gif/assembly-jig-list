@@ -237,6 +237,7 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
     <a href="#" class="nav-link" onclick="showPage('standards',this)"><i class="bi bi-clipboard2-check"></i>관리기준</a>
     <a href="#" class="nav-link" onclick="showPage('inspection',this)"><i class="bi bi-file-earmark-check"></i>점검 시트</a>
     <a href="#" class="nav-link" onclick="showPage('inspHistory',this)"><i class="bi bi-clipboard2-pulse"></i>점검 이력</a>
+    <a href="#" class="nav-link" onclick="showPage('repairHistory',this)"><i class="bi bi-wrench"></i>수리 이력</a>
     <a href="#" class="nav-link" onclick="showPage('history',this)"><i class="bi bi-clock-history"></i>이력 관리</a>
     <div class="nav-section mt-2">시스템</div>
     <a href="#" class="nav-link" onclick="showPage('bomUpload',this)"><i class="bi bi-upload"></i>파일 업로드</a>
@@ -440,6 +441,28 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
             </div>
           </div>
         </div>
+        <!-- 특이사항 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold py-2" style="background:#fff8e1;border-left:4px solid #ffc107;font-size:0.9rem">
+              <i class="bi bi-pencil-square me-1 text-warning"></i>특이사항 <span class="text-muted fw-normal small">(이번 점검에만 저장, 다음 점검 시 초기화)</span>
+            </div>
+            <div class="card-body py-2">
+              <textarea class="form-control" id="inspRemarks" rows="3" placeholder="점검 중 발생한 특이사항을 입력하세요." oninput="inspState.remarks=this.value"></textarea>
+            </div>
+          </div>
+        </div>
+        <!-- 수리내용 -->
+        <div class="col-12">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold py-2" style="background:#fce4ec;border-left:4px solid #e53935;font-size:0.9rem">
+              <i class="bi bi-wrench me-1 text-danger"></i>수리내용 <span class="text-muted fw-normal small">(이번 점검에만 저장, 다음 점검 시 초기화)</span>
+            </div>
+            <div class="card-body py-2">
+              <textarea class="form-control" id="inspRepairContent" rows="3" placeholder="수리한 내용을 입력하세요." oninput="inspState.repairContent=this.value"></textarea>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -458,6 +481,21 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
         </div>
       </div>
       <div id="inspHistoryContent"></div>
+    </div>
+
+    <!-- Repair History -->
+    <div id="page-repairHistory" class="page">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-wrench me-2 text-danger"></i>수리 이력</h5>
+      </div>
+      <div class="filter-bar mb-3">
+        <div class="row g-2">
+          <div class="col-md-4"><select class="form-select form-select-sm" id="repairHistFilterJig" onchange="renderRepairHistoryPage()"><option value="">전체 지그</option></select></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="repairHistFrom" onchange="renderRepairHistoryPage()"></div>
+          <div class="col-md-2"><input type="date" class="form-control form-control-sm" id="repairHistTo" onchange="renderRepairHistoryPage()"></div>
+        </div>
+      </div>
+      <div id="repairHistoryContent"></div>
     </div>
 
     <!-- Settings -->
@@ -485,6 +523,32 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
                 <button class="btn btn-primary" onclick="addLocation()"><i class="bi bi-plus"></i>추가</button>
               </div>
               <div id="locationList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa">지그명 관리</div>
+            <div class="card-body">
+              <div class="input-group mb-2">
+                <input type="text" class="form-control" id="newJigNameInput" placeholder="지그명 입력">
+                <button class="btn btn-primary" onclick="addJigName()"><i class="bi bi-plus"></i>추가</button>
+              </div>
+              <div id="jigNameList"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card shadow-sm">
+            <div class="card-header fw-bold" style="background:#f8f9fa">제조사 관리</div>
+            <div class="card-body">
+              <div class="row g-2 mb-2 align-items-end">
+                <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="newMakerName" placeholder="제조사명 *"></div>
+                <div class="col-md-3"><input type="text" class="form-control form-control-sm" id="newMakerContact" placeholder="담당자"></div>
+                <div class="col-md-4"><input type="text" class="form-control form-control-sm" id="newMakerPhone" placeholder="연락처"></div>
+                <div class="col-md-1"><button class="btn btn-primary btn-sm w-100" onclick="addMaker()"><i class="bi bi-plus"></i></button></div>
+              </div>
+              <div id="makerList"></div>
             </div>
           </div>
         </div>
@@ -523,8 +587,9 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
                 <tbody>
                   <tr><td><strong>문서번호</strong></td><td>SSC-PR-02</td></tr>
                   <tr><td><strong>관리부서</strong></td><td>조립팀</td></tr>
-                  <tr><td><strong>적용범위</strong></td><td>제품의 생산활동에 기여하는 지그에 대하여 도입부터 폐기까지의 제반활동 사항(제조, 검사)에 필요한 지그의 일상점검(년/월간점검)에 대하여 적용한다.</td></tr>
+                  <tr><td><strong>적용범위</strong></td><td>제품의 생산활동에 기여하는 지그에 대하여 도입부터 폐기까지의 제반활동 사항(제조, 검사)에 필요한 지그의 일상점검(1회/시업전)에 대하여 적용한다.</td></tr>
                   <tr><td><strong>프로세스 책임자</strong></td><td>조립팀장</td></tr>
+                  <tr><td><strong>점검주기</strong></td><td>1회 / 시업전</td></tr>
                   <tr><td><strong>모니터링 지표</strong></td><td>지그 고장율 · 지그 수리비용</td></tr>
                 </tbody>
               </table>
@@ -548,10 +613,6 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
                   <tr>
                     <td><span class="badge bg-secondary">지그 등록</span></td>
                     <td>지그등록대장에 등록한다. [사양, 제조일자, 구입가격 등 양식에 준하는 내용]</td>
-                  </tr>
-                  <tr>
-                    <td><span class="badge bg-info text-dark">예방보존계획 수립</span></td>
-                    <td>조립팀장은 등록된 지그에 대해 중점 관리항목을 기준으로 점검항목 및 지그예방보존계획을 수립한다. 중점관리항목은 지그의 중요기능에 관해 제조업체의 필수 점검 항목을 말한다.<br>지그중요도 평가 실시 후 예방보존계획 수립 시 반영토록 한다. [HMC 고객요구사항]<br>전년도 지그의 고장 및 이력사항을 검토하여 예방보존계획에 추가 또는 불필요한 항목은 삭제한다.<br><small class="text-muted">※ 매년 12월말까지 익년도 예방보존계획 수립 후 경영진 승인</small></td>
                   </tr>
                   <tr>
                     <td><span class="badge bg-success">일상점검 실시</span></td>
@@ -664,7 +725,11 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
             </div>
           </div>
           <div class="col-md-6"><label class="form-label">지그명 <span class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="fName" placeholder="예: 바디 고정지그 A"></div>
+            <div class="input-group">
+              <select class="form-select" id="fName"></select>
+              <button class="btn btn-outline-secondary" type="button" onclick="quickAddJigName()" title="지그명 빠른 추가"><i class="bi bi-plus"></i></button>
+            </div>
+          </div>
           <div class="col-md-4"><label class="form-label">보유수량</label>
             <input type="number" class="form-control qty-input" id="fQty" min="0" value="1"></div>
           <div class="col-md-4"><label class="form-label">보관위치</label>
@@ -689,9 +754,14 @@ body { background:var(--light-bg); font-family:'Segoe UI',sans-serif; }
         </div>
         <div class="section-divider"><i class="bi bi-building me-2"></i>제조사 정보</div>
         <div class="row g-3 mb-3">
-          <div class="col-md-4"><label class="form-label">제조사</label><input type="text" class="form-control" id="fMaker"></div>
-          <div class="col-md-4"><label class="form-label">담당자</label><input type="text" class="form-control" id="fContact"></div>
-          <div class="col-md-4"><label class="form-label">연락처</label><input type="text" class="form-control" id="fPhone"></div>
+          <div class="col-md-4"><label class="form-label">제조사</label>
+            <div class="input-group">
+              <select class="form-select" id="fMaker" onchange="onMakerSelect()"></select>
+              <button class="btn btn-outline-secondary" type="button" onclick="quickAddMaker()" title="제조사 빠른 추가"><i class="bi bi-plus"></i></button>
+            </div>
+          </div>
+          <div class="col-md-4"><label class="form-label">담당자</label><input type="text" class="form-control" id="fContact" placeholder="자동입력 또는 직접 입력"></div>
+          <div class="col-md-4"><label class="form-label">연락처</label><input type="text" class="form-control" id="fPhone" placeholder="자동입력 또는 직접 입력"></div>
         </div>
         <div class="section-divider"><i class="bi bi-images me-2"></i>사진</div>
         <div class="drop-zone mb-2" onclick="document.getElementById('photoInput').click()"
@@ -1032,6 +1102,7 @@ async function renderPage(n) {
   if (n==='byCustomer') await renderByCustomer();
   if (n==='history')     await renderHistory();
   if (n==='inspHistory') await renderInspHistoryPage();
+  if (n==='repairHistory') await renderRepairHistoryPage();
   if (n==='inspection')  await renderInspection();
   if (n==='settings')   await renderSettings();
   if (n==='standards')  await renderStandards();
@@ -1382,7 +1453,7 @@ async function deleteHistory(id) {
 // ═══════════════════════════════════════
 // INSPECTION
 // ═══════════════════════════════════════
-let inspState = { jigId:null, date:'', mgmtNo:'', signs:['','',''], images:[null,null,null], sections:[], finalJudgment:{조립:'',품질:'',개발:''} };
+let inspState = { jigId:null, date:'', mgmtNo:'', signs:['','',''], images:[null,null,null], sections:[], finalJudgment:{조립:'',품질:'',개발:''}, remarks:'', repairContent:'' };
 let inspTemplateLocked = false;
 let _inspHasTemplate = false;
 
@@ -1428,11 +1499,13 @@ async function onInspJigChange() {
     inspState = {
       jigId,
       date: new Date().toISOString().split('T')[0],
+      repairContent:'',
       mgmtNo: template.mgmtNo||'',
       signs: template.signs||['','',''],
       images: template.images||[null,null,null],
       sections,
-      finalJudgment: {조립:'',품질:'',개발:''}
+      finalJudgment: {조립:'',품질:'',개발:''},
+      remarks: ''
     };
     inspTemplateLocked = true;
     _inspHasTemplate = true;
@@ -1440,9 +1513,10 @@ async function onInspJigChange() {
     inspState = {
       jigId,
       date: new Date().toISOString().split('T')[0],
-      mgmtNo:'', signs:['','',''], images:[null,null,null],
+      mgmtNo:'', signs:['','',''], images:[null,null,null], repairContent:'',
       sections: _defaultSections(),
-      finalJudgment: {조립:'',품질:'',개발:''}
+      finalJudgment: {조립:'',품질:'',개발:''},
+      remarks: ''
     };
     inspTemplateLocked = false;
     _inspHasTemplate = false;
@@ -1454,7 +1528,7 @@ async function onInspJigChange() {
 }
 
 function newInspectionSheet() {
-  inspState = { jigId:null, date:new Date().toISOString().split('T')[0], mgmtNo:'', signs:['','',''], images:[null,null,null], sections:_defaultSections(), finalJudgment:{조립:'',품질:'',개발:''} };
+  inspState = { jigId:null, date:new Date().toISOString().split('T')[0], mgmtNo:'', signs:['','',''], images:[null,null,null], sections:_defaultSections(), finalJudgment:{조립:'',품질:'',개발:''}, remarks:'', repairContent:'' };
   inspTemplateLocked = false;
   _inspHasTemplate = false;
   _applyInspStateToForm();
@@ -1489,6 +1563,8 @@ function _applyInspStateToForm() {
   const dateEl = document.getElementById('inspDate'); if(dateEl) dateEl.value = s.date||'';
   const mgmtEl = document.getElementById('inspMgmtNo'); if(mgmtEl) mgmtEl.value = s.mgmtNo||'';
   ['inspSign1','inspSign2','inspSign3'].forEach((id,i)=>{ const el=document.getElementById(id); if(el) el.value=s.signs[i]||''; });
+  const remEl = document.getElementById('inspRemarks'); if(remEl) remEl.value = s.remarks||'';
+  const repEl = document.getElementById('inspRepairContent'); if(repEl) repEl.value = s.repairContent||'';
   [1,2,3].forEach(n => {
     const box = document.getElementById('inspImgBox'+n);
     const del = document.getElementById('inspImgDel'+n);
@@ -1749,6 +1825,8 @@ async function saveInspectionSheet() {
   inspState.date   = date;
   inspState.mgmtNo = document.getElementById('inspMgmtNo').value;
   inspState.signs  = ['inspSign1','inspSign2','inspSign3'].map(id=>document.getElementById(id).value);
+  inspState.remarks = document.getElementById('inspRemarks')?.value || '';
+  inspState.repairContent = document.getElementById('inspRepairContent')?.value || '';
   const fj = inspState.finalJudgment;
   const allJudgments = inspState.sections.flatMap(s => s.groups.flatMap(g => g.items.map(it => it.judgment)));
   const result = allJudgments.length === 0 ? '미판정'
@@ -1785,7 +1863,8 @@ async function saveInspRec(data) {
   await setSetting(key, data);
   const idx = await getSetting('insp_rec_index', []);
   idx.push({ key, jigId: data.jigId, date: data.date, result: data.result,
-             createdAt: data.createdAt, mgmtNo: data.mgmtNo||'', finalJudgment: data.finalJudgment||{} });
+             createdAt: data.createdAt, mgmtNo: data.mgmtNo||'', finalJudgment: data.finalJudgment||{},
+             repairContent: data.repairContent||'' });
   await setSetting('insp_rec_index', idx);
   return key;
 }
@@ -1856,6 +1935,58 @@ async function renderInspHistoryPage() {
   Object.entries(byDate).sort(([a],[b]) => b.localeCompare(a)).forEach(([date, items]) => {
     html += `<div class="mb-1 text-muted small fw-bold ps-1"><i class="bi bi-calendar3 me-1"></i>${date}</div>`;
     items.forEach(i => { html += _buildInspItemHtml(i, jigMap); });
+  });
+  el.innerHTML = html;
+}
+
+async function renderRepairHistoryPage() {
+  const jigs = await dbGetAll('jigs');
+  const jigMap = {}; jigs.forEach(j => jigMap[j.id] = j);
+
+  const jigSel = document.getElementById('repairHistFilterJig');
+  if (jigSel) {
+    const curV = jigSel.value;
+    jigSel.innerHTML = '<option value="">전체 지그</option>' + jigs.map(j=>`<option value="${j.id}">${j.model} - ${j.name}</option>`).join('');
+    jigSel.value = curV;
+  }
+
+  let records = await getAllInspRecs();
+  records = records.filter(i => i.repairContent && i.repairContent.trim() !== '');
+
+  const fJig  = document.getElementById('repairHistFilterJig')?.value;
+  const fFrom = document.getElementById('repairHistFrom')?.value;
+  const fTo   = document.getElementById('repairHistTo')?.value;
+  if (fJig)  records = records.filter(i => i.jigId == fJig);
+  if (fFrom) records = records.filter(i => (i.date||'') >= fFrom);
+  if (fTo)   records = records.filter(i => (i.date||'') <= fTo);
+  records.sort((a,b) => (b.date||b.createdAt||'') > (a.date||a.createdAt||'') ? 1 : -1);
+
+  const el = document.getElementById('repairHistoryContent');
+  if (!el) return;
+  if (!records.length) {
+    el.innerHTML = '<div class="text-center text-muted py-5"><i class="bi bi-inbox" style="font-size:3rem"></i><div class="mt-2">수리 기록 없음</div></div>';
+    return;
+  }
+  const byDate = {};
+  records.forEach(i => { const d = i.date||'날짜미상'; if(!byDate[d]) byDate[d]=[]; byDate[d].push(i); });
+  let html = `<div class="mb-2 text-muted small">총 <strong>${records.length}</strong>건</div>`;
+  Object.entries(byDate).sort(([a],[b]) => b.localeCompare(a)).forEach(([date, items]) => {
+    html += `<div class="mb-1 text-muted small fw-bold ps-1"><i class="bi bi-calendar3 me-1"></i>${date}</div>`;
+    items.forEach(i => {
+      const jig = jigMap[i.jigId];
+      const jigName = jig ? `${jig.model} - ${jig.name}` : '삭제된 지그';
+      html += `<div class="insp-history-item" onclick="loadInspRecord('${i.key}')">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <span class="badge bg-danger me-2"><i class="bi bi-wrench"></i> 수리</span>
+            <strong>${jigName}</strong>
+            ${i.mgmtNo?`<span class="text-muted ms-2 small">${i.mgmtNo}</span>`:''}
+          </div>
+          <small class="text-muted">${i.date||''}</small>
+        </div>
+        <div class="mt-2 p-2 rounded" style="background:#fce4ec;border-left:3px solid #e53935;font-size:0.88rem;white-space:pre-wrap">${i.repairContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+      </div>`;
+    });
   });
   el.innerHTML = html;
 }
@@ -1934,7 +2065,15 @@ async function loadInspRecord(key) {
     <div class="d-flex align-items-center flex-wrap gap-2 p-3 border rounded" style="background:#f8f9fa">
       <span class="fw-bold">최종 판정:</span>${fjHtml}
       <span class="ms-auto fw-bold">종합결과: <span class="badge bg-${rcCls} fs-6">${rc}</span></span>
-    </div>`;
+    </div>
+    ${insp.remarks ? `<div class="mt-3 p-3 border rounded" style="background:#fff8e1;border-left:4px solid #ffc107 !important">
+      <div class="fw-bold small mb-1"><i class="bi bi-pencil-square me-1 text-warning"></i>특이사항</div>
+      <div style="white-space:pre-wrap;font-size:0.9rem">${insp.remarks.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>` : ''}
+    ${insp.repairContent ? `<div class="mt-3 p-3 border rounded" style="background:#fce4ec;border-left:4px solid #e53935 !important">
+      <div class="fw-bold small mb-1"><i class="bi bi-wrench me-1 text-danger"></i>수리내용</div>
+      <div style="white-space:pre-wrap;font-size:0.9rem">${insp.repairContent.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+    </div>` : ''}`;
 
   document.getElementById('inspViewTitle').textContent = `점검 시트 — ${jigName} (${insp.date||''})`;
   document.getElementById('inspViewDelBtn').style.display = canDelete() ? '' : 'none';
@@ -1981,6 +2120,22 @@ async function renderSettings() {
       <span class="badge bg-secondary flex-grow-1 p-2 text-start">${l}</span>
       <button class="btn btn-sm btn-outline-danger" onclick="removeLocation(${i})"><i class="bi bi-x"></i></button>
     </div>`).join('')||'<div class="text-muted small">등록된 위치 없음</div>';
+
+  const jigNames=await getSetting('jigNames',[]);
+  document.getElementById('jigNameList').innerHTML=jigNames.map((n,i)=>`
+    <div class="d-flex align-items-center gap-2 mb-1">
+      <span class="badge bg-primary flex-grow-1 p-2 text-start fw-normal">${n}</span>
+      <button class="btn btn-sm btn-outline-danger" onclick="removeJigName(${i})"><i class="bi bi-x"></i></button>
+    </div>`).join('')||'<div class="text-muted small">등록된 지그명 없음</div>';
+
+  const makers=await getSetting('makers',[]);
+  document.getElementById('makerList').innerHTML=makers.length ? makers.map((m,i)=>`
+    <div class="d-flex align-items-center gap-1 mb-1 p-2 border rounded" style="font-size:0.84rem">
+      <div class="fw-bold" style="min-width:90px">${m.name}</div>
+      <div class="text-muted" style="min-width:70px">${m.contact||'-'}</div>
+      <div class="text-muted flex-grow-1">${m.phone||'-'}</div>
+      <button class="btn btn-sm btn-outline-danger ms-1" style="padding:1px 6px" onclick="removeMaker(${i})"><i class="bi bi-x"></i></button>
+    </div>`).join('') : '<div class="text-muted small">등록된 제조사 없음</div>';
 
   // Show/hide clear data for admin only
   if(document.getElementById('btnClearData')) document.getElementById('btnClearData').style.display=isAdmin()?'':'none';
@@ -2051,6 +2206,70 @@ async function addLocation() {
 }
 async function removeLocation(i) {
   const locs=await getSetting('locations',[]); locs.splice(i,1); await setSetting('locations',locs); renderSettings();
+}
+async function addJigName() {
+  const v=document.getElementById('newJigNameInput').value.trim(); if(!v) return;
+  const names=await getSetting('jigNames',[]); if(!names.includes(v)){ names.push(v); await setSetting('jigNames',names); }
+  document.getElementById('newJigNameInput').value=''; renderSettings();
+}
+async function removeJigName(i) {
+  const names=await getSetting('jigNames',[]); names.splice(i,1); await setSetting('jigNames',names); renderSettings();
+}
+async function quickAddJigName() {
+  const v=prompt('추가할 지그명:'); if(!v||!v.trim()) return;
+  const names=await getSetting('jigNames',[]); if(!names.includes(v.trim())){ names.push(v.trim()); await setSetting('jigNames',names); }
+  const sel=document.getElementById('fName');
+  if(sel && !Array.from(sel.options).find(o=>o.value===v.trim())) {
+    const opt=document.createElement('option'); opt.value=v.trim(); opt.textContent=v.trim(); sel.appendChild(opt);
+  }
+  if(sel) sel.value=v.trim();
+}
+async function addMaker() {
+  const name=document.getElementById('newMakerName').value.trim(); if(!name) { alert('제조사명을 입력하세요'); return; }
+  const contact=document.getElementById('newMakerContact').value.trim();
+  const phone=document.getElementById('newMakerPhone').value.trim();
+  const makers=await getSetting('makers',[]);
+  if(makers.find(m=>m.name===name)) { alert('이미 등록된 제조사입니다'); return; }
+  makers.push({name, contact, phone});
+  await setSetting('makers', makers);
+  document.getElementById('newMakerName').value='';
+  document.getElementById('newMakerContact').value='';
+  document.getElementById('newMakerPhone').value='';
+  renderSettings();
+}
+async function removeMaker(i) {
+  const makers=await getSetting('makers',[]); makers.splice(i,1); await setSetting('makers',makers); renderSettings();
+}
+async function onMakerSelect() {
+  const name=document.getElementById('fMaker').value;
+  if(!name) return;
+  const makers=await getSetting('makers',[]);
+  const m=makers.find(m=>m.name===name);
+  if(m) {
+    document.getElementById('fContact').value=m.contact||'';
+    document.getElementById('fPhone').value=m.phone||'';
+  }
+}
+async function quickAddMaker() {
+  const name=prompt('제조사명을 입력하세요');
+  if(!name || !name.trim()) return;
+  const contact=prompt('담당자 이름 (없으면 빈칸)') || '';
+  const phone=prompt('연락처 (없으면 빈칸)') || '';
+  const makers=await getSetting('makers',[]);
+  if(!makers.find(m=>m.name===name.trim())) {
+    makers.push({name:name.trim(), contact:contact.trim(), phone:phone.trim()});
+    await setSetting('makers',makers);
+  }
+  // 모달의 제조사 드롭다운 갱신 후 선택
+  const sel=document.getElementById('fMaker');
+  if(sel && !Array.from(sel.options).find(o=>o.value===name.trim())) {
+    const opt=document.createElement('option');
+    opt.value=name.trim(); opt.textContent=name.trim();
+    sel.appendChild(opt);
+  }
+  sel.value=name.trim();
+  document.getElementById('fContact').value=contact.trim();
+  document.getElementById('fPhone').value=phone.trim();
 }
 
 // ═══════════════════════════════════════
@@ -2134,7 +2353,8 @@ async function showAddModal() {
   if(!canAdd()) { alert('등록 권한이 없습니다'); return; }
   document.getElementById('modalTitle').innerHTML='<i class="bi bi-plus-circle me-2"></i>지그 등록';
   document.getElementById('editId').value='';
-  ['fName','fCustomer','fMaker','fContact','fPhone','fNote'].forEach(id=>document.getElementById(id).value='');
+  ['fCustomer','fContact','fPhone','fNote'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('fMaker').value='';
   document.getElementById('fQty').value=1;
   document.getElementById('fDate').value=new Date().toISOString().split('T')[0];
   document.getElementById('fPhase').value='개발';
@@ -2142,7 +2362,7 @@ async function showAddModal() {
   // btnJigInspSheet: 신규 등록 시에도 표시 (저장 후 점검시트로 이동)
   currentPhotos=[]; renderPhotoGrid();
   currentModels=[]; document.getElementById('fIsShared').checked=false; renderModelTags();
-  await populateSelects();
+  await populateSelects('', '');
   new bootstrap.Modal(document.getElementById('jigModal')).show();
 }
 
@@ -2153,15 +2373,13 @@ async function editJig(id) {
   document.getElementById('editId').value=id;
   currentModels = j.models && j.models.length ? [...j.models] : (j.model ? [j.model] : []);
   document.getElementById('fIsShared').checked = currentModels.length > 1;
-  await populateSelects(j.location);
+  await populateSelects(j.location, j.maker||'', j.name||'');
   renderModelTags();
-  document.getElementById('fName').value=j.name||'';
   document.getElementById('fQty').value=j.qty||1;
   document.getElementById('fDate').value=j.date||'';
   document.getElementById('fPhase').value=j.phase||'개발';
   document.getElementById('fStatus').value=j.status||'정상';
   document.getElementById('btnJigInspSheet').style.display='';
-  document.getElementById('fMaker').value=j.maker||'';
   document.getElementById('fContact').value=j.contact||'';
   document.getElementById('fPhone').value=j.phone||'';
   document.getElementById('fCustomer').value=j.customer||'';
@@ -2170,9 +2388,23 @@ async function editJig(id) {
   new bootstrap.Modal(document.getElementById('jigModal')).show();
 }
 
-async function populateSelects(selLocation) {
+async function populateSelects(selLocation, selMaker='', selName='') {
   const locations=await getSetting('locations',[]);
   document.getElementById('fLocation').innerHTML='<option value="">-- 위치 선택 --</option>'+locations.map(l=>`<option value="${l}" ${l===selLocation?'selected':''}>${l}</option>`).join('');
+  const makers=await getSetting('makers',[]);
+  let makerOpts='<option value="">-- 선택 --</option>'+makers.map(m=>`<option value="${m.name}">${m.name}</option>`).join('');
+  if (selMaker && !makers.find(m=>m.name===selMaker)) {
+    makerOpts += `<option value="${selMaker}">${selMaker}</option>`;
+  }
+  document.getElementById('fMaker').innerHTML=makerOpts;
+  if (selMaker) document.getElementById('fMaker').value=selMaker;
+  const jigNames=await getSetting('jigNames',[]);
+  let nameOpts='<option value="">-- 지그명 선택 --</option>'+jigNames.map(n=>`<option value="${n}">${n}</option>`).join('');
+  if (selName && !jigNames.includes(selName)) {
+    nameOpts += `<option value="${selName}">${selName}</option>`;
+  }
+  document.getElementById('fName').innerHTML=nameOpts;
+  if (selName) document.getElementById('fName').value=selName;
   document.getElementById('fModelDropdown').classList.remove('show');
 }
 
@@ -2370,7 +2602,9 @@ document.addEventListener('paste', function(e) {
 async function quickAddLocation(){
   const n=prompt('추가할 보관위치:'); if(!n||!n.trim()) return;
   const locs=await getSetting('locations',[]); if(!locs.includes(n.trim())){ locs.push(n.trim()); await setSetting('locations',locs); }
-  await populateSelects(n.trim());
+  const curMaker=document.getElementById('fMaker')?.value||'';
+  const curName=document.getElementById('fName')?.value||'';
+  await populateSelects(n.trim(), curMaker, curName);
 }
 
 // ═══════════════════════════════════════
